@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Virtual Office</title>
+  <script src="https://unpkg.com/konva@10/konva.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0f0f13; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+    #app { display: flex; width: 100vw; height: 100vh; }
+    #canvas-container { flex: 1; position: relative; overflow: hidden; cursor: default; }
+    #canvas-container.dragging { cursor: grabbing; }
+
+    #canvas-container canvas { position: absolute; z-index: 1; }
+
+    #hud {
+      position: fixed; top: 16px; left: 16px; z-index: 100;
+      display: flex; flex-direction: column; gap: 8px;
+      pointer-events: none;
+    }
+    .hud-badge {
+      background: rgba(15,15,19,0.85);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 6px 12px;
+      color: rgba(255,255,255,0.7); font-size: 12px;
+      backdrop-filter: blur(8px);
+    }
+    .hud-badge span { color: #7dd3fc; font-weight: 600; }
+
+    #focus-indicator {
+      position: fixed; bottom: 16px; left: 50%; z-index: 100;
+      transform: translateX(-50%);
+      background: rgba(15,15,19,0.85);
+      border: 1px solid rgba(125,211,252,0.3);
+      border-radius: 20px; padding: 6px 16px;
+      color: rgba(255,255,255,0.5); font-size: 11px;
+      backdrop-filter: blur(8px); pointer-events: none;
+      white-space: nowrap; transition: opacity 0.3s;
+    }
+    #controls-hint {
+      position: fixed; bottom: 16px; right: 16px; z-index: 100;
+      background: rgba(15,15,19,0.85);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; padding: 10px 14px;
+      color: rgba(255,255,255,0.35); font-size: 10px;
+      line-height: 1.8; backdrop-filter: blur(8px); pointer-events: none;
+    }
+    #controls-hint kbd {
+      background: rgba(255,255,255,0.1); border-radius: 3px;
+      padding: 1px 5px; font-size: 10px; color: rgba(255,255,255,0.6);
+    }
+  </style>
+</head>
+<body>
+
+<!-- HUD außerhalb canvas-container damit es immer sichtbar ist -->
+<div id="hud">
+  <div class="hud-badge"><span id="status-display" style="color:#fbbf24;">⏳ Verbinde...</span></div>
+  <div class="hud-badge">Position: <span id="pos-display">60.0m, 45.0m</span></div>
+  <div class="hud-badge">Zoom: <span id="zoom-display">150%</span></div>
+</div>
+<div id="focus-indicator">📷 Kamera folgt Charakter — drücke <strong>F</strong> zum Lösen</div>
+<div id="controls-hint">
+  <kbd>W A S D</kbd> — Bewegen<br>
+  <kbd>Pfeiltasten</kbd> — Kamera<br>
+  <kbd>Shift</kbd> — Sprinten<br>
+  <kbd>F</kbd> — Kamera fokus<br>
+  <kbd>Rechtsklick drag</kbd> — Kamera<br>
+  <kbd>Mausrad</kbd> — Zoom
+</div>
+
+<div id="app">
+  <div id="canvas-container"></div>
+</div>
+
+<script>
+window.addEventListener('load', function () {
+
+  // ── Konstanten ────────────────────────────────────────────
+  const P        = 32;          // Pixel pro Meter
+  const WALK     = 4.8;         // m/s
+  const SPRINT   = 15.0;        // m/s
+  const MAP      = { w: 120, h: 100 };
+  const ZOOM_MAX = 4.0;
+  const CAM_SPEED = 5;
+
+  // ── DOM ───────────────────────────────────────────────────
+  const posEl    = document.getElementById('pos-display');
+  const statusEl = document.getElementById('status-display');
+  const zoomEl   = document.getElementById('zoom-display');
+  const focusEl  = document.getElementById('focus-indicator');
+  const wrap     = document.getElementById('canvas-container');
+
+  // ── Stage ─────────────────────────────────────────────────
+  const stage = new Konva.Stage({
+    container: 'canvas-container',
+    width: wrap.clientWidth,
+    height: wrap.clientHeight,
+  });
+  window.addEventListener('resize', () => {
+    stage.width(wrap.clientWidth);
+    stage.height(wrap.clientHeight);
+  });
+
+  const lGround   = new Konva.Layer();
+  const lBuilding = new Konva.Layer();
+  const lAvatars  = new Konva.Layer();
+  stage.add(lGround, lBuilding, lAvatars);
+
+  const allLayers = () => [lGround, lBuilding, lAvatars];
+
+  // ── Kamera ────────────────────────────────────────────────
+  let scale        = 1.5;
+  let cameraFollow = true;
+
+  function applyScale(s) { allLayers().forEach(l => l.scale({ x: s, y: s })); }
+  function applyPos(pos) { allLayers().forEach(l => l.position(pos)); }
+
+  function followPlayer() {
+    if (!cameraFollow) return;
+    applyPos({
+      x: stage.width()  / 2 - player.wx * P * scale,
+      y: stage.height() / 2 - player.wy * P * scale,
+    });
+  }
+
+  function minScale() {
+    return Math.max(stage.width() / (MAP.w * P), stage.height() / (MAP.h * P), 0.15);
+  }
+
+  // ── Boden ─────────────────────────────────────────────────
+  function drawGround() {
+    lGround.add(new Konva.Rect({
+      x: 0, y: 0, width: MAP.w * P, height: MAP.h * P, fill: '#4a7c4e',
+    }));
+    for (let i = 0; i < 700; i++) {
+      const gx = Math.random() * MAP.w * P;
+      const gy = Math.random() * MAP.h * P;
+      lGround.add(new Konva.Line({
+        points: [gx, gy, gx + (Math.random()-0.5)*3, gy - 3 - Math.random()*5],
+        stroke: Math.random() > 0.5 ? '#5a9460' : '#3d6b41',
+        strokeWidth: 1, opacity: 0.55,
+      }));
+    }
+    lGround.add(new Konva.Rect({
+      x: 58*P, y: 42*P, width: 4*P, height: 6*P, fill: '#b0a898', cornerRadius: 2,
+    }));
+    lGround.batchDraw();
+  }
+
+  // ── Gebäude-Daten ─────────────────────────────────────────
+  const ROOMS = [
+    { label: 'Eingangshalle', fill: '#d4c9a8', pts: [47,48,73,48,73,62,47,62] },
+    { label: 'Flur',          fill: '#ccc4b0', pts: [47,62,73,62,73,68,47,68] },
+    { label: 'Büro A',        fill: '#b8d4c8', pts: [35,40,47,40,47,62,35,62] },
+    { label: 'Büro B',        fill: '#b8c4d4', pts: [73,40,85,40,85,62,73,62] },
+    { label: 'Meetingraum',   fill: '#d4b8c4', pts: [35,68,85,68,85,80,35,80] },
+  ];
+
+  const WALLS = [
+    { f:[47,48], t:[58,48], type:'wall' },
+    { f:[62,48], t:[73,48], type:'wall' },
+    { f:[73,48], t:[73,62], type:'wall' },
+    { f:[47,48], t:[47,62], type:'wall' },
+    { f:[47,62], t:[73,62], type:'shared' },
+    { f:[58,48], t:[62,48], type:'door' },
+    { f:[73,62], t:[73,68], type:'wall' },
+    { f:[73,68], t:[47,68], type:'wall' },
+    { f:[47,68], t:[47,62], type:'wall' },
+    { f:[35,40], t:[47,40], type:'wall' },
+    { f:[47,40], t:[47,48], type:'wall' },
+    { f:[35,40], t:[35,62], type:'wall' },
+    { f:[35,62], t:[47,62], type:'shared' },
+    { f:[39,62], t:[43,62], type:'door' },
+    { f:[73,40], t:[85,40], type:'wall' },
+    { f:[85,40], t:[85,62], type:'wall' },
+    { f:[73,62], t:[85,62], type:'shared' },
+    { f:[77,62], t:[81,62], type:'door' },
+    { f:[35,68], t:[85,68], type:'shared' },
+    { f:[85,68], t:[85,80], type:'wall' },
+    { f:[85,80], t:[35,80], type:'wall' },
+    { f:[35,80], t:[35,68], type:'wall' },
+    { f:[58,68], t:[62,68], type:'door' },
+  ];
+
+  // ── Gebäude zeichnen ─────────────────────────────────────
+  function drawBuilding() {
+    ROOMS.forEach(r => {
+      lBuilding.add(new Konva.Line({
+        points: r.pts.map(v => v * P), closed: true, fill: r.fill, stroke: 'transparent',
+      }));
+      const xs = r.pts.filter((_,i) => i%2===0);
+      const ys = r.pts.filter((_,i) => i%2===1);
+      lBuilding.add(new Konva.Text({
+        x: (Math.min(...xs)+Math.max(...xs))/2*P - 40,
+        y: (Math.min(...ys)+Math.max(...ys))/2*P - 6,
+        width: 80, text: r.label,
+        fontSize: 11, fill: 'rgba(0,0,0,0.4)', align: 'center',
+      }));
+    });
+    WALLS.forEach(w => {
+      const x1=w.f[0]*P, y1=w.f[1]*P, x2=w.t[0]*P, y2=w.t[1]*P;
+      if (w.type === 'door') {
+        lBuilding.add(new Konva.Line({
+          points: [x1,y1,x2,y2], stroke: '#8B6914', strokeWidth: 3, dash: [5,3],
+        }));
+        lBuilding.add(new Konva.Arc({
+          x: x1, y: y1, innerRadius: 0, outerRadius: Math.hypot(x2-x1, y2-y1),
+          angle: 90, rotation: y1===y2 ? -90 : 0, fill: 'rgba(139,105,20,0.1)',
+        }));
+      } else {
+        lBuilding.add(new Konva.Line({
+          points: [x1,y1,x2,y2],
+          stroke: w.type==='shared' ? 'rgba(74,55,40,0.3)' : '#4a3728',
+          strokeWidth: w.type==='shared' ? 1.5 : 3, lineCap: 'round',
+        }));
+      }
+    });
+    lBuilding.batchDraw();
+  }
+
+  // ── Smiley ────────────────────────────────────────────────
+  function createSmiley(name, isMe=false) {
+    const g = new Konva.Group();
+	g.add(new Konva.Text({
+      text: name, fontSize: 10,
+      fill: isMe ? '#fef9c3' : '#dbeafe',
+      fontStyle: isMe ? 'bold' : 'normal',
+      offsetX: 35, offsetY: 45, width: 70, align: 'center',
+    }));
+    g.add(new Konva.Circle({ radius:16, fill:'rgba(0,0,0,0.18)', offsetX:-2, offsetY:4 }));
+    g.add(new Konva.Circle({
+      radius: 16,
+      fill:   isMe ? '#facc15' : '#60a5fa',
+      stroke: isMe ? '#ca8a04' : '#2563eb',
+      strokeWidth: 2,
+    }));
+    g.add(new Konva.Circle({ x:-5, y:-5, radius:2.5, fill:'#1e293b' }));
+    g.add(new Konva.Circle({ x: 5, y:-5, radius:2.5, fill:'#1e293b' }));
+    g.add(new Konva.Shape({
+      sceneFunc(ctx, shape) {
+        ctx.beginPath();
+        ctx.moveTo(-6, 3);
+        ctx.quadraticCurveTo(0, 10, 6, 3);
+        ctx.strokeShape(shape);
+      },
+      stroke: '#1e293b', strokeWidth: 2.5, lineCap: 'round',
+    }));
+    if (isMe) {
+      g.add(new Konva.Circle({
+        radius: 21, stroke: '#fde68a', strokeWidth: 1.5, dash: [4,3], opacity: 0.7,
+      }));
+    }
+    
+    return g;
+  }
+
+  // ── Spieler ──────────────────────────────────────────────
+  const player = { wx: 60.0, wy: 45.0, group: null };
+
+  function spawnPlayer() {
+    const g = createSmiley('...', true);
+    g.position({ x: player.wx * P, y: player.wy * P });
+    lAvatars.add(g);
+    player.group = g;
+  }
+  
+  function spawnDemoPlayer() {
+    const anna = createSmiley('Anna · Empfang');
+    anna.position({ x: 52*P, y: 54*P });
+    lAvatars.add(anna);
+
+    const tom = createSmiley('Tom · Engineering · Neu');
+    tom.position({ x: 65*P, y: 56*P });
+    lAvatars.add(tom);
+
+    lAvatars.batchDraw();
+  }
+
+  // ── WebSocket mit Reconnect ───────────────────────────────
+  const WS_URL         = 'ws://localhost:8000/ws';
+  const SEND_INTERVAL  = 50;
+
+  let socket           = null;
+  let myName           = '';
+  let reconnectTimer   = null;
+  let reconnectDelay   = 1000;   // Start 1s
+  const MAX_DELAY      = 10000;  // Max 10s
+  let intentionalClose = false;
+  let lastSentPos      = { x: -999, y: -999 };
+  let lastSendTime     = 0;
+
+  const remoteUsers = {};
+
+  function connectWebSocket(name) {
+    myName = name;
+    player.group.findOne('Text').text(name);
+    lAvatars.batchDraw();
+    connect();
+  }
+
+  function connect() {
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+
+    statusEl.textContent = '⏳ Verbinde...';
+    statusEl.style.color = '#fbbf24';
+
+    socket = new WebSocket(WS_URL);
+
+    socket.onopen = () => {
+      console.log('[WS] Verbunden');
+      reconnectDelay = 1000;  // Reset nach Erfolg
+      socket.send(JSON.stringify({ type: 'set_name', name: myName }));
+      statusEl.textContent = '🟢 Verbunden';
+      statusEl.style.color = '#86efac';
+    };
+
+    socket.onmessage = e => handleMessage(JSON.parse(e.data));
+
+    socket.onclose = () => {
+      if (intentionalClose) return;
+
+      console.log(`[WS] Getrennt – reconnect in ${reconnectDelay}ms`);
+      statusEl.textContent = `🔴 Getrennt – reconnect in ${reconnectDelay/1000}s`;
+      statusEl.style.color = '#fca5a5';
+
+      // Remote User leeren – beim Reconnect kommt neuer Snapshot
+      Object.keys(remoteUsers).forEach(id => removeRemoteUser(id));
+
+      reconnectTimer = setTimeout(() => {
+        connect();
+      }, reconnectDelay);
+
+      // Exponential backoff: 1s → 2s → 4s → ... → 30s
+      reconnectDelay = Math.min(reconnectDelay * 2, MAX_DELAY);
+    };
+
+    socket.onerror = () => {
+      console.log('[WS] Verbindungsfehler');
+      // onclose wird danach automatisch aufgerufen
+    };
+  }
+
+  function sendMove() {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    const now = performance.now();
+    if (now - lastSendTime < SEND_INTERVAL) return;
+    if (Math.abs(player.wx - lastSentPos.x) < 0.01 &&
+        Math.abs(player.wy - lastSentPos.y) < 0.01) return;
+    socket.send(JSON.stringify({ type: 'move', x: player.wx, y: player.wy }));
+    lastSentPos  = { x: player.wx, y: player.wy };
+    lastSendTime = now;
+  }
+
+  // ── Messages verarbeiten ──────────────────────────────────
+  function handleMessage(data) {
+    switch (data.type) {
+      case 'snapshot':   data.users.forEach(u => addOrUpdateUser(u)); break;
+      case 'user_joined': addOrUpdateUser(data); break;
+      case 'user_moved':  moveRemoteUser(data.user_id, data.x, data.y); break;
+      case 'user_left':   removeRemoteUser(data.user_id); break;
+    }
+  }
+
+  function addOrUpdateUser(data) {
+    if (remoteUsers[data.user_id]) {
+      moveRemoteUser(data.user_id, data.x, data.y);
+      return;
+    }
+    const label = data.department ? `${data.name} · ${data.department}` : data.name;
+    const g = createSmiley(label, false);
+    g.position({ x: data.x * P, y: data.y * P });
+    lAvatars.add(g);
+    remoteUsers[data.user_id] = { group: g };
+    lAvatars.batchDraw();
+  }
+
+  function moveRemoteUser(user_id, x, y) {
+    const u = remoteUsers[user_id];
+    if (!u) return;
+    u.group.to({ x: x * P, y: y * P, duration: 0.1 });
+  }
+
+  function removeRemoteUser(user_id) {
+    const u = remoteUsers[user_id];
+    if (!u) return;
+    u.group.destroy();
+    delete remoteUsers[user_id];
+    lAvatars.batchDraw();
+  }
+
+  // ── Name Modal ────────────────────────────────────────────
+  function showNameModal() {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position:fixed; inset:0; z-index:1000;
+      background:rgba(0,0,0,0.75);
+      display:flex; align-items:center; justify-content:center;
+      backdrop-filter:blur(6px);
+    `;
+    overlay.innerHTML = `
+      <div style="background:#1e1e2e; border:1px solid rgba(255,255,255,0.12);
+        border-radius:16px; padding:36px; min-width:300px; text-align:center;">
+        <div style="font-size:36px; margin-bottom:12px;">👋</div>
+        <div style="color:#e2e8f0; font-size:18px; font-weight:600; margin-bottom:6px;">Willkommen!</div>
+        <div style="color:rgba(255,255,255,0.4); font-size:13px; margin-bottom:20px;">Wie möchtest du heißen?</div>
+        <input id="name-input" type="text" placeholder="Dein Name" maxlength="50"
+          style="width:100%; padding:10px 14px; border-radius:8px;
+            border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05);
+            color:#fff; font-size:14px; outline:none; margin-bottom:14px; box-sizing:border-box;" />
+        <button id="name-submit"
+          style="width:100%; padding:10px; border-radius:8px; background:#4f46e5;
+            border:none; color:#fff; font-size:14px; font-weight:600; cursor:pointer;">
+          Betreten
+        </button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#name-input');
+    const btn   = overlay.querySelector('#name-submit');
+    input.focus();
+    function submit() {
+      const name = input.value.trim() || 'Gast';
+      document.body.removeChild(overlay);
+      connectWebSocket(name);
+    }
+    btn.addEventListener('click', submit);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  }
+
+  // ── Tastatur ─────────────────────────────────────────────
+  const keys = {};
+  window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (e.code === 'KeyF') {
+      cameraFollow = !cameraFollow;
+      focusEl.style.opacity = cameraFollow ? '1' : '0.35';
+      if (cameraFollow) { followPlayer(); stage.batchDraw(); }
+    }
+  });
+  window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+  // ── Game Loop ─────────────────────────────────────────────
+  let lastT = performance.now();
+
+  function loop() {
+    const now = performance.now();
+    const dt  = Math.min((now - lastT) / 1000, 0.05);
+    lastT = now;
+
+    const sprint = keys['ShiftLeft'] || keys['ShiftRight'];
+    const spd    = (sprint ? SPRINT : WALK) * dt;
+    let dx=0, dy=0;
+    if (keys['KeyW']) dy -= 1;
+    if (keys['KeyS']) dy += 1;
+    if (keys['KeyA']) dx -= 1;
+    if (keys['KeyD']) dx += 1;
+
+    if (dx !== 0 || dy !== 0) {
+      if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
+      player.wx = Math.max(0, Math.min(MAP.w, player.wx + dx*spd));
+      player.wy = Math.max(0, Math.min(MAP.h, player.wy + dy*spd));
+      player.group.position({ x: player.wx*P, y: player.wy*P });
+      lAvatars.batchDraw();
+      posEl.textContent = `${player.wx.toFixed(1)}m, ${player.wy.toFixed(1)}m`;
+      if (cameraFollow) { followPlayer(); stage.batchDraw(); }
+      sendMove();
+    }
+
+    // Pfeiltasten → Kamera
+    if (keys['ArrowUp'])    { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x(),     y:lGround.y()+CAM_SPEED}); stage.batchDraw(); }
+    if (keys['ArrowDown'])  { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x(),     y:lGround.y()-CAM_SPEED}); stage.batchDraw(); }
+    if (keys['ArrowLeft'])  { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x()+CAM_SPEED, y:lGround.y()});     stage.batchDraw(); }
+    if (keys['ArrowRight']) { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x()-CAM_SPEED, y:lGround.y()});     stage.batchDraw(); }
+
+    requestAnimationFrame(loop);
+  }
+
+  // ── Rechtsklick-Drag ──────────────────────────────────────
+  let dragging = false, dragStart = {x:0,y:0}, layerStart = {x:0,y:0};
+
+  stage.on('mousedown', e => {
+    if (e.evt.button !== 2) return;
+    e.evt.preventDefault();
+    cameraFollow = false;
+    focusEl.style.opacity = '0.35';
+    dragging   = true;
+    dragStart  = { x: e.evt.clientX, y: e.evt.clientY };
+    layerStart = { x: lGround.x(), y: lGround.y() };
+    wrap.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    applyPos({ x: layerStart.x+(e.clientX-dragStart.x), y: layerStart.y+(e.clientY-dragStart.y) });
+    stage.batchDraw();
+  });
+  window.addEventListener('mouseup', e => {
+    if (e.button !== 2) return;
+    dragging = false;
+    wrap.classList.remove('dragging');
+  });
+  stage.on('contextmenu', e => e.evt.preventDefault());
+
+  // ── Zoom ──────────────────────────────────────────────────
+  stage.on('wheel', e => {
+    e.evt.preventDefault();
+    const oldScale = scale;
+    const zoomIn   = e.evt.deltaY < 0;
+    scale = Math.max(minScale(), Math.min(ZOOM_MAX, scale * (zoomIn ? 1.1 : 0.91)));
+    if (scale === oldScale) return;
+    applyScale(scale);
+    const refX = zoomIn ? stage.getPointerPosition().x : stage.width()  / 2;
+    const refY = zoomIn ? stage.getPointerPosition().y : stage.height() / 2;
+    const lp   = { x: lGround.x(), y: lGround.y() };
+    applyPos({
+      x: refX - (refX - lp.x) / oldScale * scale,
+      y: refY - (refY - lp.y) / oldScale * scale,
+    });
+    zoomEl.textContent = `${Math.round(scale*100)}%`;
+    if (cameraFollow) followPlayer();
+    stage.batchDraw();
+  });
+
+  // ── Start ─────────────────────────────────────────────────
+  drawGround();
+  drawBuilding();
+  spawnDemoPlayer();
+  spawnPlayer();
+  applyScale(scale);
+  followPlayer();
+  stage.batchDraw();
+  requestAnimationFrame(loop);
+  showNameModal();
+
+}); // window.load
+</script>
+</body>
+</html>
