@@ -11,7 +11,6 @@
     #app { display: flex; width: 100vw; height: 100vh; }
     #canvas-container { flex: 1; position: relative; overflow: hidden; cursor: default; }
     #canvas-container.dragging { cursor: grabbing; }
-
     #canvas-container canvas { position: absolute; z-index: 1; }
 
     #hud {
@@ -27,6 +26,18 @@
       backdrop-filter: blur(8px);
     }
     .hud-badge span { color: #7dd3fc; font-weight: 600; }
+
+    #btn-hud-login {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; padding: 7px 14px;
+      color: #fff; font-size: 12px; font-weight: 600;
+      cursor: pointer; letter-spacing: 0.03em;
+      transition: opacity 0.2s, transform 0.1s;
+      pointer-events: all;
+    }
+    #btn-hud-login:hover  { opacity: 0.85; transform: translateY(-1px); }
+    #btn-hud-login:active { transform: translateY(0); opacity: 1; }
 
     #focus-indicator {
       position: fixed; bottom: 16px; left: 50%; z-index: 100;
@@ -54,11 +65,11 @@
 </head>
 <body>
 
-<!-- HUD außerhalb canvas-container damit es immer sichtbar ist -->
 <div id="hud">
-  <div class="hud-badge"><span id="status-display" style="color:#fbbf24;">⏳ Verbinde...</span></div>
+  <div class="hud-badge"><span id="status-display" style="color:#fbbf24;">⏳ Nicht verbunden</span></div>
   <div class="hud-badge">Position: <span id="pos-display">60.0m, 45.0m</span></div>
   <div class="hud-badge">Zoom: <span id="zoom-display">150%</span></div>
+  <button id="btn-hud-login">🔑 Einloggen</button>
 </div>
 <div id="focus-indicator">📷 Kamera folgt Charakter — drücke <strong>F</strong> zum Lösen</div>
 <div id="controls-hint">
@@ -78,12 +89,15 @@
 window.addEventListener('load', function () {
 
   // ── Konstanten ────────────────────────────────────────────
-  const P        = 32;          // Pixel pro Meter
-  const WALK     = 4.8;         // m/s
-  const SPRINT   = 15.0;        // m/s
-  const MAP      = { w: 120, h: 100 };
-  const ZOOM_MAX = 4.0;
+  const P         = 32;
+  const WALK      = 4.8;
+  const SPRINT    = 15.0;
+  const MAP       = { w: 120, h: 100 };
+  const ZOOM_MAX  = 4.0;
   const CAM_SPEED = 5;
+  const AUTH_URL  = 'https://auth.freischule.info';
+  const WS_URL    = 'wss://presence.freischule.info/ws';
+  const SEND_INTERVAL = 50;
 
   // ── DOM ───────────────────────────────────────────────────
   const posEl    = document.getElementById('pos-display');
@@ -91,6 +105,7 @@ window.addEventListener('load', function () {
   const zoomEl   = document.getElementById('zoom-display');
   const focusEl  = document.getElementById('focus-indicator');
   const wrap     = document.getElementById('canvas-container');
+  const loginBtn = document.getElementById('btn-hud-login');
 
   // ── Stage ─────────────────────────────────────────────────
   const stage = new Konva.Stage({
@@ -107,12 +122,12 @@ window.addEventListener('load', function () {
   const lBuilding = new Konva.Layer();
   const lAvatars  = new Konva.Layer();
   stage.add(lGround, lBuilding, lAvatars);
-
   const allLayers = () => [lGround, lBuilding, lAvatars];
 
   // ── Kamera ────────────────────────────────────────────────
   let scale        = 1.5;
   let cameraFollow = true;
+  let myEmail = '';
 
   function applyScale(s) { allLayers().forEach(l => l.scale({ x: s, y: s })); }
   function applyPos(pos) { allLayers().forEach(l => l.position(pos)); }
@@ -223,12 +238,7 @@ window.addEventListener('load', function () {
   // ── Smiley ────────────────────────────────────────────────
   function createSmiley(name, isMe=false) {
     const g = new Konva.Group();
-	g.add(new Konva.Text({
-      text: name, fontSize: 10,
-      fill: isMe ? '#fef9c3' : '#dbeafe',
-      fontStyle: isMe ? 'bold' : 'normal',
-      offsetX: 35, offsetY: 45, width: 70, align: 'center',
-    }));
+
     g.add(new Konva.Circle({ radius:16, fill:'rgba(0,0,0,0.18)', offsetX:-2, offsetY:4 }));
     g.add(new Konva.Circle({
       radius: 16,
@@ -252,8 +262,22 @@ window.addEventListener('load', function () {
         radius: 21, stroke: '#fde68a', strokeWidth: 1.5, dash: [4,3], opacity: 0.7,
       }));
     }
-    
+    // Name-Label – per name-Tag auffindbar
+    g.add(new Konva.Text({
+      name: 'nameLabel',
+      text: name, fontSize: 10,
+      fill: isMe ? '#fef9c3' : '#dbeafe',
+      fontStyle: isMe ? 'bold' : 'normal',
+      offsetX: 70, offsetY: 45,
+      width: 140, align: 'center',
+    }));
+
     return g;
+  }
+
+  function setSmileyName(group, name) {
+    const label = group.findOne('.nameLabel');
+    if (label) { label.text(name); lAvatars.batchDraw(); }
   }
 
   // ── Spieler ──────────────────────────────────────────────
@@ -265,81 +289,102 @@ window.addEventListener('load', function () {
     lAvatars.add(g);
     player.group = g;
   }
-  
-  function spawnDemoPlayer() {
+
+  function spawnDemoPlayers() {
     const anna = createSmiley('Anna · Empfang');
     anna.position({ x: 52*P, y: 54*P });
     lAvatars.add(anna);
-
     const tom = createSmiley('Tom · Engineering · Neu');
     tom.position({ x: 65*P, y: 56*P });
     lAvatars.add(tom);
-
     lAvatars.batchDraw();
   }
 
-  // ── WebSocket mit Reconnect ───────────────────────────────
-  const WS_URL         = 'ws://localhost:8000/ws';
-  const SEND_INTERVAL  = 50;
-
+  // ── WebSocket ─────────────────────────────────────────────
   let socket           = null;
   let myName           = '';
+  let myJwt            = null;
   let reconnectTimer   = null;
-  let reconnectDelay   = 1000;   // Start 1s
-  const MAX_DELAY      = 10000;  // Max 10s
+  let reconnectDelay   = 1000;
+  const MAX_DELAY      = 10000;
   let intentionalClose = false;
   let lastSentPos      = { x: -999, y: -999 };
   let lastSendTime     = 0;
+  const remoteUsers    = {};
 
-  const remoteUsers = {};
-
-  function connectWebSocket(name) {
+  function connectWebSocket(name, jwt = null) {
     myName = name;
-    player.group.findOne('Text').text(name);
-    lAvatars.batchDraw();
+    myJwt  = jwt;
+    setSmileyName(player.group, name);
     connect();
   }
 
   function connect() {
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-
     statusEl.textContent = '⏳ Verbinde...';
     statusEl.style.color = '#fbbf24';
 
-    socket = new WebSocket(WS_URL);
+    const url = myJwt ? `${WS_URL}?token=${myJwt}` : WS_URL;
+    socket = new WebSocket(url);
 
     socket.onopen = () => {
       console.log('[WS] Verbunden');
-      reconnectDelay = 1000;  // Reset nach Erfolg
-      socket.send(JSON.stringify({ type: 'set_name', name: myName }));
+      reconnectDelay = 1000;
+      if (!myJwt) {
+        socket.send(JSON.stringify({ type: 'set_name', name: myName }));
+      }
       statusEl.textContent = '🟢 Verbunden';
       statusEl.style.color = '#86efac';
+      if (myJwt) scheduleTokenRefresh();
     };
 
     socket.onmessage = e => handleMessage(JSON.parse(e.data));
 
     socket.onclose = () => {
       if (intentionalClose) return;
-
-      console.log(`[WS] Getrennt – reconnect in ${reconnectDelay}ms`);
       statusEl.textContent = `🔴 Getrennt – reconnect in ${reconnectDelay/1000}s`;
       statusEl.style.color = '#fca5a5';
-
-      // Remote User leeren – beim Reconnect kommt neuer Snapshot
       Object.keys(remoteUsers).forEach(id => removeRemoteUser(id));
-
-      reconnectTimer = setTimeout(() => {
-        connect();
-      }, reconnectDelay);
-
-      // Exponential backoff: 1s → 2s → 4s → ... → 30s
+      reconnectTimer = setTimeout(() => connect(), reconnectDelay);
       reconnectDelay = Math.min(reconnectDelay * 2, MAX_DELAY);
     };
 
-    socket.onerror = () => {
-      console.log('[WS] Verbindungsfehler');
-      // onclose wird danach automatisch aufgerufen
-    };
+    socket.onerror = () => console.log('[WS] Fehler');
+  }
+
+  // ── Token Refresh (httponly Cookie) ──────────────────────
+  let refreshTimer = null;
+
+  function scheduleTokenRefresh() {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(async () => {
+      try {
+        // Browser schickt httponly Cookie automatisch mit
+        const res = await fetch(`${AUTH_URL}/user/refresh`, {
+          method: 'POST',
+          credentials: 'include',   // ← Cookie mitsenden
+        });
+        const data = await res.json();
+
+        if (data.access_token) {
+          myJwt = data.access_token;
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'refresh_token', token: myJwt }));
+          }
+          console.log('[Auth] Token erneuert');
+          scheduleTokenRefresh();
+        } else {
+          // Refresh Token abgelaufen → neu einloggen
+          console.warn('[Auth] Session abgelaufen');
+          statusEl.textContent = '🔴 Session abgelaufen';
+          statusEl.style.color = '#fca5a5';
+          loginBtn.style.display = 'block';
+          showLoginModal();
+        }
+      } catch (e) {
+        console.warn('[Auth] Token-Refresh fehlgeschlagen', e);
+      }
+    }, 10 * 60 * 1000); // alle 10 Minuten
   }
 
   function sendMove() {
@@ -353,10 +398,10 @@ window.addEventListener('load', function () {
     lastSendTime = now;
   }
 
-  // ── Messages verarbeiten ──────────────────────────────────
+  // ── Messages ─────────────────────────────────────────────
   function handleMessage(data) {
     switch (data.type) {
-      case 'snapshot':   data.users.forEach(u => addOrUpdateUser(u)); break;
+      case 'snapshot':    data.users.forEach(u => addOrUpdateUser(u)); break;
       case 'user_joined': addOrUpdateUser(data); break;
       case 'user_moved':  moveRemoteUser(data.user_id, data.x, data.y); break;
       case 'user_left':   removeRemoteUser(data.user_id); break;
@@ -365,8 +410,7 @@ window.addEventListener('load', function () {
 
   function addOrUpdateUser(data) {
     if (remoteUsers[data.user_id]) {
-      moveRemoteUser(data.user_id, data.x, data.y);
-      return;
+      moveRemoteUser(data.user_id, data.x, data.y); return;
     }
     const label = data.department ? `${data.name} · ${data.department}` : data.name;
     const g = createSmiley(label, false);
@@ -390,8 +434,8 @@ window.addEventListener('load', function () {
     lAvatars.batchDraw();
   }
 
-  // ── Name Modal ────────────────────────────────────────────
-  function showNameModal() {
+  // ── Kombiniertes Modal (Gast + Login) ─────────────────────
+  function showLoginModal() {
     const overlay = document.createElement('div');
     overlay.style.cssText = `
       position:fixed; inset:0; z-index:1000;
@@ -401,32 +445,175 @@ window.addEventListener('load', function () {
     `;
     overlay.innerHTML = `
       <div style="background:#1e1e2e; border:1px solid rgba(255,255,255,0.12);
-        border-radius:16px; padding:36px; min-width:300px; text-align:center;">
-        <div style="font-size:36px; margin-bottom:12px;">👋</div>
-        <div style="color:#e2e8f0; font-size:18px; font-weight:600; margin-bottom:6px;">Willkommen!</div>
-        <div style="color:rgba(255,255,255,0.4); font-size:13px; margin-bottom:20px;">Wie möchtest du heißen?</div>
-        <input id="name-input" type="text" placeholder="Dein Name" maxlength="50"
-          style="width:100%; padding:10px 14px; border-radius:8px;
-            border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05);
-            color:#fff; font-size:14px; outline:none; margin-bottom:14px; box-sizing:border-box;" />
-        <button id="name-submit"
-          style="width:100%; padding:10px; border-radius:8px; background:#4f46e5;
-            border:none; color:#fff; font-size:14px; font-weight:600; cursor:pointer;">
-          Betreten
-        </button>
+        border-radius:16px; padding:36px; min-width:340px; text-align:center;">
+
+        <div style="font-size:36px; margin-bottom:8px;">🏢</div>
+        <div style="color:#e2e8f0; font-size:18px; font-weight:600; margin-bottom:20px;">
+          Virtual Office
+        </div>
+
+        <div id="modal-info"  style="color:#86efac; font-size:12px; margin-bottom:12px; display:none;"></div>
+        <div id="modal-error" style="color:#fca5a5; font-size:12px; margin-bottom:12px; display:none;"></div>
+
+        <!-- Gast -->
+        <div id="step-guest">
+          <div style="color:rgba(255,255,255,0.4); font-size:11px; text-transform:uppercase;
+            letter-spacing:0.08em; margin-bottom:8px;">Als Gast betreten</div>
+          <input id="input-guestname" type="text" placeholder="Dein Name" maxlength="50"
+            style="width:100%; padding:10px 14px; border-radius:8px; margin-bottom:10px;
+              border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05);
+              color:#fff; font-size:14px; outline:none; box-sizing:border-box;" />
+          <button id="btn-guest"
+            style="width:100%; padding:10px; border-radius:8px; background:#374151;
+              border:1px solid rgba(255,255,255,0.1); color:#fff; font-size:13px;
+              font-weight:600; cursor:pointer; margin-bottom:20px;">
+            👤 Als Gast betreten
+          </button>
+
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
+            <div style="flex:1; height:1px; background:rgba(255,255,255,0.1);"></div>
+            <div style="color:rgba(255,255,255,0.25); font-size:11px;">oder einloggen</div>
+            <div style="flex:1; height:1px; background:rgba(255,255,255,0.1);"></div>
+          </div>
+
+          <input id="input-email" type="email" placeholder="E-Mail" maxlength="100"
+            style="width:100%; padding:10px 14px; border-radius:8px; margin-bottom:10px;
+              border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05);
+              color:#fff; font-size:14px; outline:none; box-sizing:border-box;" />
+          <input id="input-password" type="password" placeholder="Passwort" maxlength="100"
+            style="width:100%; padding:10px 14px; border-radius:8px; margin-bottom:14px;
+              border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05);
+              color:#fff; font-size:14px; outline:none; box-sizing:border-box;" />
+          <button id="btn-login"
+            style="width:100%; padding:10px; border-radius:8px;
+              background:linear-gradient(135deg,#4f46e5,#7c3aed);
+              border:none; color:#fff; font-size:14px; font-weight:600; cursor:pointer;">
+            🔑 Einloggen / Registrieren
+          </button>
+        </div>
+
+        <!-- Registrierung bestätigen -->
+        <div id="step-register" style="display:none;">
+          <div style="color:rgba(255,255,255,0.5); font-size:13px; margin-bottom:16px;">
+            Neuer Account – Passwort bestätigen:
+          </div>
+          <input id="input-repassword" type="password" placeholder="Passwort wiederholen"
+            style="width:100%; padding:10px 14px; border-radius:8px; margin-bottom:16px;
+              border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05);
+              color:#fff; font-size:14px; outline:none; box-sizing:border-box;" />
+          <button id="btn-register"
+            style="width:100%; padding:10px; border-radius:8px; background:#059669;
+              border:none; color:#fff; font-size:14px; font-weight:600; cursor:pointer;">
+            ✅ Account erstellen
+          </button>
+        </div>
+
       </div>
     `;
     document.body.appendChild(overlay);
-    const input = overlay.querySelector('#name-input');
-    const btn   = overlay.querySelector('#name-submit');
-    input.focus();
-    function submit() {
-      const name = input.value.trim() || 'Gast';
-      document.body.removeChild(overlay);
-      connectWebSocket(name);
+
+    const errorEl     = overlay.querySelector('#modal-error');
+    const infoEl      = overlay.querySelector('#modal-info');
+    const stepGuest   = overlay.querySelector('#step-guest');
+    const stepReg     = overlay.querySelector('#step-register');
+    const guestInput  = overlay.querySelector('#input-guestname');
+    const emailInput  = overlay.querySelector('#input-email');
+    const passInput   = overlay.querySelector('#input-password');
+    const repassInput = overlay.querySelector('#input-repassword');
+    const btnGuest    = overlay.querySelector('#btn-guest');
+    const btnLogin    = overlay.querySelector('#btn-login');
+    const btnReg      = overlay.querySelector('#btn-register');
+
+    let userId = null;
+
+    function showError(msg) {
+      errorEl.innerHTML = msg; errorEl.style.display = 'block';
+      infoEl.style.display = 'none';
     }
-    btn.addEventListener('click', submit);
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+    function showInfo(msg) {
+      infoEl.innerHTML = msg; infoEl.style.display = 'block';
+      errorEl.style.display = 'none';
+    }
+    function close() {
+      document.body.removeChild(overlay);
+      loginBtn.style.display = 'none';
+    }
+
+    // Gast
+    btnGuest.addEventListener('click', () => {
+      const name = guestInput.value.trim() || 'Gast';
+      close();
+      connectWebSocket(name);
+    });
+
+    // Login
+    btnLogin.addEventListener('click', async () => {
+      btnLogin.disabled = true;
+      errorEl.style.display = 'none';
+      try {
+	    myEmail = emailInput.value.trim();
+        const res = await fetch(`${AUTH_URL}/user/login`, {
+          method: 'POST',
+          credentials: 'include',   // Cookie empfangen
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email:              myEmail,
+            password:           passInput.value,
+            device_fingerprint: navigator.userAgent,
+            device_name:        'Virtual Office Web',
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Login fehlgeschlagen');
+
+        if (data.status === 'login' || data.status === 'login_with_verify_email_send') {
+          if (data.status === 'login_with_verify_email_send')
+            showInfo('Eingeloggt! Verifikations-E-Mail wurde gesendet.');
+          close();
+          connectWebSocket(data.email, data.access_token);
+
+        } else if (data.status === 'register') {
+          userId = data.id;
+          stepGuest.style.display = 'none';
+          stepReg.style.display   = 'block';
+          showInfo('Neuer Account – bitte Passwort bestätigen.');
+        }
+      } catch (err) {
+        showError(err.message);
+      }
+      btnLogin.disabled = false;
+    });
+
+    // Registrierung
+    btnReg.addEventListener('click', async () => {
+      btnReg.disabled = true;
+      try {
+        const res = await fetch(`${AUTH_URL}/user/register`, {
+          method: 'POST',
+          credentials: 'include',   // Cookie empfangen
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+		    email: myEmail, 
+			repassword: repassInput.value 
+		  })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const detail = Array.isArray(data.detail)
+            ? data.detail.map(d => d.msg).join(', ') : data.detail;
+          throw new Error(detail);
+        }
+        close();
+        connectWebSocket(data.email, data.access_token);
+      } catch (err) {
+        showError(err.message);
+      }
+      btnReg.disabled = false;
+    });
+
+    guestInput.focus();
+    guestInput.addEventListener('keydown', e => { if (e.key === 'Enter') btnGuest.click(); });
+    passInput.addEventListener('keydown',  e => { if (e.key === 'Enter') btnLogin.click(); });
   }
 
   // ── Tastatur ─────────────────────────────────────────────
@@ -468,11 +655,10 @@ window.addEventListener('load', function () {
       sendMove();
     }
 
-    // Pfeiltasten → Kamera
-    if (keys['ArrowUp'])    { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x(),     y:lGround.y()+CAM_SPEED}); stage.batchDraw(); }
-    if (keys['ArrowDown'])  { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x(),     y:lGround.y()-CAM_SPEED}); stage.batchDraw(); }
-    if (keys['ArrowLeft'])  { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x()+CAM_SPEED, y:lGround.y()});     stage.batchDraw(); }
-    if (keys['ArrowRight']) { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x()-CAM_SPEED, y:lGround.y()});     stage.batchDraw(); }
+    if (keys['ArrowUp'])    { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x(),       y:lGround.y()+CAM_SPEED}); stage.batchDraw(); }
+    if (keys['ArrowDown'])  { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x(),       y:lGround.y()-CAM_SPEED}); stage.batchDraw(); }
+    if (keys['ArrowLeft'])  { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x()+CAM_SPEED, y:lGround.y()});       stage.batchDraw(); }
+    if (keys['ArrowRight']) { cameraFollow=false; focusEl.style.opacity='0.35'; applyPos({x:lGround.x()-CAM_SPEED, y:lGround.y()});       stage.batchDraw(); }
 
     requestAnimationFrame(loop);
   }
@@ -483,8 +669,7 @@ window.addEventListener('load', function () {
   stage.on('mousedown', e => {
     if (e.evt.button !== 2) return;
     e.evt.preventDefault();
-    cameraFollow = false;
-    focusEl.style.opacity = '0.35';
+    cameraFollow = false; focusEl.style.opacity = '0.35';
     dragging   = true;
     dragStart  = { x: e.evt.clientX, y: e.evt.clientY };
     layerStart = { x: lGround.x(), y: lGround.y() };
@@ -497,8 +682,7 @@ window.addEventListener('load', function () {
   });
   window.addEventListener('mouseup', e => {
     if (e.button !== 2) return;
-    dragging = false;
-    wrap.classList.remove('dragging');
+    dragging = false; wrap.classList.remove('dragging');
   });
   stage.on('contextmenu', e => e.evt.preventDefault());
 
@@ -525,13 +709,15 @@ window.addEventListener('load', function () {
   // ── Start ─────────────────────────────────────────────────
   drawGround();
   drawBuilding();
-  spawnDemoPlayer();
   spawnPlayer();
+  spawnDemoPlayers();
   applyScale(scale);
   followPlayer();
   stage.batchDraw();
   requestAnimationFrame(loop);
-  showNameModal();
+
+  loginBtn.addEventListener('click', showLoginModal);
+  showLoginModal();
 
 }); // window.load
 </script>
