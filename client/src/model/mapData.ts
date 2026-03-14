@@ -1,0 +1,35 @@
+import type { Room, Wall } from './types';
+
+export const ROOMS: Room[] = [
+  { label: 'Eingangshalle', fill: '#d4c9a8', pts: [47,48,73,48,73,62,47,62] },
+  { label: 'Flur',          fill: '#ccc4b0', pts: [47,62,73,62,73,68,47,68] },
+  { label: 'Büro A',        fill: '#b8d4c8', pts: [35,40,47,40,47,62,35,62] },
+  { label: 'Büro B',        fill: '#b8c4d4', pts: [73,40,85,40,85,62,73,62] },
+  { label: 'Meetingraum',   fill: '#d4b8c4', pts: [35,68,85,68,85,80,35,80] },
+];
+
+export const WALLS: Wall[] = [
+  { f:[47,48], t:[58,48], type:'wall' },
+  { f:[62,48], t:[73,48], type:'wall' },
+  { f:[73,48], t:[73,62], type:'wall' },
+  { f:[47,48], t:[47,62], type:'wall' },
+  { f:[47,62], t:[73,62], type:'shared' },
+  { f:[58,48], t:[62,48], type:'door' },
+  { f:[73,62], t:[73,68], type:'wall' },
+  { f:[73,68], t:[47,68], type:'wall' },
+  { f:[47,68], t:[47,62], type:'wall' },
+  { f:[35,40], t:[47,40], type:'wall' },
+  { f:[47,40], t:[47,48], type:'wall' },
+  { f:[35,40], t:[35,62], type:'wall' },
+  { f:[35,62], t:[47,62], type:'shared' },
+  { f:[39,62], t:[43,62], type:'door' },
+  { f:[73,40], t:[85,40], type:'wall' },
+  { f:[85,40], t:[85,62], type:'wall' },
+  { f:[73,62], t:[85,62], type:'shared' },
+  { f:[77,62], t:[81,62], type:'door' },
+  { f:[35,68], t:[85,68], type:'shared' },
+  { f:[85,68], t:[85,80], type:'wall' },
+  { f:[85,80], t:[35,80], type:'wall' },
+  { f:[35,80], t:[35,68], type:'wall' },
+  { f:[58,68], t:[62,68], type:'door' },
+];

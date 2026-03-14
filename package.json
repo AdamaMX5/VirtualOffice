@@ -1,0 +1,12 @@
+{
+  "name": "virtual-office",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n CLIENT,SERVER -c cyan,yellow \"npm run dev --prefix client\" \"npm run dev --prefix server\"",
+    "build": "npm run build --prefix client && npm run build --prefix server",
+    "start": "node server/dist/index.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
