@@ -8,5 +8,5 @@ export const CAM_SPEED = 5;           // Pixel/Frame für Pfeil-Kamerasteuerung
 export const SEND_INTERVAL = 50;      // ms zwischen WS-Positionsupdates
 
 // Backend-URLs – in Produktion vom Vite-Proxy durch den Node-Server weitergeleitet
-export const WS_PATH   = '/ws';       // Vite-Proxy → ws://localhost:3000/ws → PresenceService
-export const GQL_PATH  = '/graphql';  // Vite-Proxy → http://localhost:3000/graphql
+export const WS_PATH   = '/ws';   // Vite-Proxy → ws://localhost:3000/ws → PresenceService
+export const API_PATH  = '/api';  // Vite-Proxy → http://localhost:3000/api

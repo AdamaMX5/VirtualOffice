@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
-import { useMutation } from '@apollo/client';
 import { useAuthStore } from '../../model/stores/authStore';
 import { usePlayerStore } from '../../model/stores/playerStore';
-import { LOGIN_MUTATION, REGISTER_MUTATION } from '../../services/authOperations';
+import { apiPost } from '../../services/apiClient';
 
 type Step = 'guest_or_login' | 'confirm_register';
 
-interface LoginResult {
-  login: { accessToken: string; email: string; status: string; id?: string };
+interface LoginResponse {
+  accessToken: string;
+  email: string;
+  status: string;
+  id?: string;
 }
-interface RegisterResult {
-  register: { accessToken: string; email: string };
+interface RegisterResponse {
+  accessToken: string;
+  email: string;
 }
 
 const overlay: React.CSSProperties = {
@@ -54,12 +57,10 @@ const LoginModal = () => {
   const [email,      setEmail]      = useState('');
   const [password,   setPassword]   = useState('');
   const [repassword, setRepassword] = useState('');
+  const [userId,     setUserId]     = useState('');
   const [error,      setError]      = useState('');
   const [info,       setInfo]       = useState('');
   const [loading,    setLoading]    = useState(false);
-
-  const [loginMutation]    = useMutation<LoginResult>(LOGIN_MUTATION);
-  const [registerMutation] = useMutation<RegisterResult>(REGISTER_MUTATION);
 
   function handleGuest() {
     const name = guestName.trim() || 'Gast';
@@ -70,29 +71,22 @@ const LoginModal = () => {
   async function handleLogin() {
     setLoading(true); setError(''); setInfo('');
     try {
-      const { data, errors } = await loginMutation({
-        variables: {
-          email,
-          password,
-          deviceFingerprint: navigator.userAgent,
-          deviceName: 'Virtual Office Web',
-        },
+      const data = await apiPost<LoginResponse>('/api/auth/login', {
+        email,
+        password,
+        deviceFingerprint: navigator.userAgent,
+        deviceName: 'Virtual Office Web',
       });
 
-      if (errors?.length) throw new Error(errors[0].message);
-      if (!data) throw new Error('Keine Antwort');
-
-      const { accessToken, status: loginStatus } = data.login;
-
-      if (loginStatus === 'login' || loginStatus === 'login_with_verify_email_send') {
-        if (loginStatus === 'login_with_verify_email_send') {
+      if (data.status === 'login' || data.status === 'login_with_verify_email_send') {
+        if (data.status === 'login_with_verify_email_send') {
           setInfo('Eingeloggt! Verifikations-E-Mail wurde gesendet.');
         }
-        setJwt(accessToken, data.login.email);
-        setName(data.login.email);
+        setJwt(data.accessToken, data.email);
+        setName(data.email);
         closeModal();
-
-      } else if (loginStatus === 'register') {
+      } else if (data.status === 'register') {
+        setUserId(data.id ?? '');
         setStep('confirm_register');
         setInfo('Neuer Account – bitte Passwort bestätigen.');
       }
@@ -105,15 +99,12 @@ const LoginModal = () => {
   async function handleRegister() {
     setLoading(true); setError('');
     try {
-      const { data, errors } = await registerMutation({
-        variables: { email, repassword },
+      const data = await apiPost<RegisterResponse>('/api/auth/register', {
+        userid: userId,
+        repassword,
       });
-
-      if (errors?.length) throw new Error(errors[0].message);
-      if (!data) throw new Error('Keine Antwort');
-
-      setJwt(data.register.accessToken, data.register.email);
-      setName(data.register.email);
+      setJwt(data.accessToken, data.email);
+      setName(data.email);
       closeModal();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fehler');

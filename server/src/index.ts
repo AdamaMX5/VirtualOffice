@@ -3,62 +3,103 @@ import path from 'path';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import { ApolloServer } from '@apollo/server';
-import { expressMiddleware } from '@as-integrations/express5';
+import { AccessToken } from 'livekit-server-sdk';
 
 import { config } from './config';
-import { typeDefs } from './graphql/schema';
-import { resolvers } from './graphql/resolvers';
-import { buildContext, type ApolloContext } from './graphql/context';
+import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxies/authProxy';
 import { wsProxy } from './proxies/wsProxy';
 
-async function main() {
-  const app = express();
+const app = express();
 
-  // ── Middleware ────────────────────────────────────────────────
-  app.use(cookieParser());
-  app.use(cors({
-    origin: config.CLIENT_ORIGIN,
-    credentials: true,
-  }));
-  app.use(express.json());
+app.use(cookieParser());
+app.use(cors({ origin: config.CLIENT_ORIGIN, credentials: true }));
+app.use(express.json());
 
-  // ── WebSocket-Proxy für PresenceService (/ws) ─────────────────
-  app.use('/ws', wsProxy);
+// ── WebSocket-Proxy für PresenceService (/ws) ─────────────────
+app.use('/ws', wsProxy);
 
-  // ── Apollo Server (GraphQL) ───────────────────────────────────
-  const apolloServer = new ApolloServer<ApolloContext>({ typeDefs, resolvers });
-  await apolloServer.start();
+// ── Auth ──────────────────────────────────────────────────────
 
-  app.use(
-    '/graphql',
-    expressMiddleware(apolloServer, {
-      context: async ({ req, res }) => buildContext({ req, res }),
-    })
-  );
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password, deviceFingerprint, deviceName } = req.body as {
+    email: string; password: string; deviceFingerprint?: string; deviceName?: string;
+  };
+  const { data, setCookie, status } = await proxyLogin(email, password, deviceFingerprint, deviceName);
+  if (setCookie) res.setHeader('Set-Cookie', setCookie);
+  if (status >= 400) {
+    const detail = Array.isArray(data.detail)
+      ? (data.detail as Array<{ msg: string }>).map(d => d.msg).join(', ')
+      : String((data as Record<string, unknown>).detail ?? 'Login fehlgeschlagen');
+    res.status(status).json({ error: detail });
+    return;
+  }
+  res.json(normalizeAuth(data));
+});
 
-  // ── Static Client Build ───────────────────────────────────────
-  const clientDist = path.join(__dirname, '../../client/dist');
-  app.use(express.static(clientDist));
-  app.get('*', (_req, res) => {
-    res.sendFile(path.join(clientDist, 'index.html'));
+app.post('/api/auth/register', async (req, res) => {
+  const { userid, repassword } = req.body as { userid: string; repassword: string };
+  const { data, setCookie, status } = await proxyRegister(userid, repassword);
+  if (setCookie) res.setHeader('Set-Cookie', setCookie);
+  if (status >= 400) {
+    const detail = Array.isArray(data.detail)
+      ? (data.detail as Array<{ msg: string }>).map(d => d.msg).join(', ')
+      : String((data as Record<string, unknown>).detail ?? 'Registrierung fehlgeschlagen');
+    res.status(status).json({ error: detail });
+    return;
+  }
+  res.json(normalizeAuth(data));
+});
+
+app.post('/api/auth/refresh', async (req, res) => {
+  const incomingCookie = req.headers.cookie;
+  const { data, setCookie, status } = await proxyRefresh(incomingCookie);
+  if (setCookie) res.setHeader('Set-Cookie', setCookie);
+  if (status >= 400) {
+    res.status(status).json({ error: 'Session abgelaufen' });
+    return;
+  }
+  res.json({ accessToken: (data.access_token ?? data.accessToken) as string });
+});
+
+// ── LiveKit Token ─────────────────────────────────────────────
+
+app.post('/api/livekit/token', async (req, res) => {
+  const { room, identity, name } = req.body as { room: string; identity: string; name?: string };
+  if (!config.LIVEKIT_API_KEY || !config.LIVEKIT_API_SECRET) {
+    res.status(500).json({ error: 'LiveKit nicht konfiguriert (API Key/Secret fehlen)' });
+    return;
+  }
+  const at = new AccessToken(config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET, {
+    identity,
+    name: name ?? identity,
+    ttl: '1h',
   });
+  at.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true });
+  const token = await at.toJwt();
+  res.json({ token, url: config.LIVEKIT_URL });
+});
 
-  // ── HTTP-Server mit WS-Upgrade-Unterstützung ──────────────────
-  const httpServer = http.createServer(app);
+// ── Client Config ─────────────────────────────────────────────
 
-  // http-proxy-middleware braucht den raw http.Server für WS-Upgrades
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  httpServer.on('upgrade', (wsProxy as any).upgrade);
+app.get('/api/config', (_req, res) => {
+  res.json({ presenceWsUrl: config.PRESENCE_WS_URL });
+});
 
-  httpServer.listen(config.PORT, () => {
-    console.log(`🚀 Server läuft auf http://localhost:${config.PORT}`);
-    console.log(`📡 GraphQL:   http://localhost:${config.PORT}/graphql`);
-    console.log(`🔌 WS-Proxy:  ws://localhost:${config.PORT}/ws → ${config.PRESENCE_WS_URL}/ws`);
-  });
-}
+// ── Static Client Build ───────────────────────────────────────
 
-main().catch(err => {
-  console.error('Server-Fehler:', err);
-  process.exit(1);
+const clientDist = path.join(__dirname, '../../client/dist');
+app.use(express.static(clientDist));
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(clientDist, 'index.html'));
+});
+
+// ── HTTP-Server mit WS-Upgrade-Unterstützung ─────────────────
+
+const httpServer = http.createServer(app);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+httpServer.on('upgrade', (wsProxy as any).upgrade);
+
+httpServer.listen(config.PORT, () => {
+  console.log(`Server läuft auf http://localhost:${config.PORT}`);
+  console.log(`WS-Proxy:  ws://localhost:${config.PORT}/ws → ${config.PRESENCE_WS_URL}/ws`);
 });

@@ -1,24 +1,17 @@
 import { useEffect } from 'react';
-import { useMutation } from '@apollo/client';
 import { useAuthStore } from '../model/stores/authStore';
-import { REFRESH_MUTATION } from '../services/authOperations';
-
-interface RefreshResult {
-  refresh: { accessToken: string };
-}
+import { apiPost } from '../services/apiClient';
 
 interface UseTokenRefreshOptions {
   onNewToken: (token: string) => void;
 }
 
 export function useTokenRefresh({ onNewToken }: UseTokenRefreshOptions) {
-  const jwt         = useAuthStore((s) => s.jwt);
-  const setJwt      = useAuthStore((s) => s.setJwt);
-  const setStatus   = useAuthStore((s) => s.setStatus);
-  const openModal   = useAuthStore((s) => s.openModal);
-  const email       = useAuthStore((s) => s.email);
-
-  const [refreshMutation] = useMutation<RefreshResult>(REFRESH_MUTATION);
+  const jwt       = useAuthStore((s) => s.jwt);
+  const setJwt    = useAuthStore((s) => s.setJwt);
+  const setStatus = useAuthStore((s) => s.setStatus);
+  const openModal = useAuthStore((s) => s.openModal);
+  const email     = useAuthStore((s) => s.email);
 
   useEffect(() => {
     if (!jwt) return;
@@ -27,11 +20,10 @@ export function useTokenRefresh({ onNewToken }: UseTokenRefreshOptions) {
 
     const timer = setInterval(async () => {
       try {
-        const { data } = await refreshMutation();
-        if (data?.refresh?.accessToken) {
-          const newToken = data.refresh.accessToken;
-          setJwt(newToken, email);
-          onNewToken(newToken);
+        const data = await apiPost<{ accessToken: string }>('/api/auth/refresh', {});
+        if (data.accessToken) {
+          setJwt(data.accessToken, email);
+          onNewToken(data.accessToken);
         } else {
           setStatus('session_expired');
           openModal();
@@ -43,5 +35,5 @@ export function useTokenRefresh({ onNewToken }: UseTokenRefreshOptions) {
     }, INTERVAL);
 
     return () => clearInterval(timer);
-  }, [jwt, email, refreshMutation, setJwt, setStatus, openModal, onNewToken]);
+  }, [jwt, email, setJwt, setStatus, openModal, onNewToken]);
 }
