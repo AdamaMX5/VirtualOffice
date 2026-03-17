@@ -1,5 +1,5 @@
-import fetch from 'node-fetch';
 import { GraphQLError } from 'graphql';
+import { AccessToken } from 'livekit-server-sdk';
 import type { ApolloContext } from './context';
 import { proxyLogin, proxyRegister, proxyRefresh } from '../proxies/authProxy';
 import { config } from '../config';
@@ -27,6 +27,9 @@ export const resolvers = {
         return { ok: false, message: String(err) };
       }
     },
+    clientConfig: () => ({
+      presenceWsUrl: config.PRESENCE_WS_URL,
+    }),
   },
 
   Mutation: {
@@ -101,6 +104,32 @@ export const resolvers = {
       return {
         accessToken: (payload.access_token ?? payload.accessToken) as string,
       };
+    },
+
+    livekitToken: async (
+      _: unknown,
+      args: { room: string; identity: string; name?: string },
+    ) => {
+      if (!config.LIVEKIT_API_KEY || !config.LIVEKIT_API_SECRET) {
+        throw new GraphQLError('LiveKit nicht konfiguriert (API Key/Secret fehlen)', {
+          extensions: { code: 'CONFIGURATION_ERROR' },
+        });
+      }
+
+      const at = new AccessToken(config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET, {
+        identity: args.identity,
+        name: args.name ?? args.identity,
+        ttl: '1h',
+      });
+      at.addGrant({
+        roomJoin: true,
+        room: args.room,
+        canPublish: true,
+        canSubscribe: true,
+      });
+
+      const token = await at.toJwt();
+      return { token, url: config.LIVEKIT_URL };
     },
   },
 };

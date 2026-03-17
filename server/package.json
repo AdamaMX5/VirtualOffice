@@ -15,7 +15,7 @@
     "express": "^5.0.1",
     "graphql": "^16.10.0",
     "http-proxy-middleware": "^3.0.3",
-    "node-fetch": "^3.3.2"
+    "livekit-server-sdk": "^2.0.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.8",
