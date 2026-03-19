@@ -65,7 +65,7 @@ export function setupPresence(httpServer: Server) {
         const msg = JSON.parse(raw.toString()) as Record<string, unknown>;
         if (msg.type === 'set_name' && typeof msg.name === 'string') {
           user.name = msg.name;
-          broadcast({ type: 'user_joined', ...user });
+          broadcast({ type: 'user_joined', ...user }, user_id);
         } else if (msg.type === 'move' && typeof msg.x === 'number' && typeof msg.y === 'number') {
           user.x = msg.x;
           user.y = msg.y;
