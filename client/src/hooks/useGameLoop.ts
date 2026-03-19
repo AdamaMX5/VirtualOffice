@@ -50,10 +50,14 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight }: GameLoopOptio
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [setFollow, setOffset]);
 
-  // Sync scale von außen (Zoom-Events)
-  const syncScale  = (s: number) => { scaleRef.current = s; };
-  const syncOffset = (o: { x: number; y: number }) => { offsetRef.current = o; };
-  const syncFollow = (f: boolean) => { followRef.current = f; };
+  // Sync scale/offset/follow automatisch aus dem Store (verhindert Stale-Closure beim Zoom)
+  useEffect(() => {
+    return useCameraStore.subscribe((state) => {
+      scaleRef.current  = state.scale;
+      offsetRef.current = state.offset;
+      followRef.current = state.follow;
+    });
+  }, []);
 
   useEffect(() => {
     let lastT = performance.now();
@@ -117,5 +121,5 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight }: GameLoopOptio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sendMove]);
 
-  return { syncScale, syncOffset, syncFollow };
 }
+
