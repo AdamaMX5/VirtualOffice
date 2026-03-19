@@ -7,16 +7,13 @@ import { AccessToken } from 'livekit-server-sdk';
 
 import { config } from './config';
 import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxies/authProxy';
-import { wsProxy } from './proxies/wsProxy';
+import { setupPresence } from './presence';
 
 const app = express();
 
 app.use(cookieParser());
 app.use(cors({ origin: config.CLIENT_ORIGIN, credentials: true }));
 app.use(express.json());
-
-// ── WebSocket-Proxy für PresenceService (/ws) ─────────────────
-app.use('/ws', wsProxy);
 
 // ── Auth ──────────────────────────────────────────────────────
 
@@ -89,17 +86,15 @@ app.get('/api/config', (_req, res) => {
 
 const clientDist = path.join(__dirname, '../../client/dist');
 app.use(express.static(clientDist));
-app.get('*', (_req, res) => {
+app.get('*path', (_req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 
 // ── HTTP-Server mit WS-Upgrade-Unterstützung ─────────────────
 
 const httpServer = http.createServer(app);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-httpServer.on('upgrade', (wsProxy as any).upgrade);
+setupPresence(httpServer);
 
 httpServer.listen(config.PORT, () => {
   console.log(`Server läuft auf http://localhost:${config.PORT}`);
-  console.log(`WS-Proxy:  ws://localhost:${config.PORT}/ws → ${config.PRESENCE_WS_URL}/ws`);
 });

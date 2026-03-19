@@ -4,4 +4,7 @@ export const config = {
   PRESENCE_URL: process.env.PRESENCE_URL ?? 'https://presence.freischule.info',
   PRESENCE_WS_URL: process.env.PRESENCE_WS_URL ?? 'wss://presence.freischule.info',
   CLIENT_ORIGIN: process.env.CLIENT_ORIGIN ?? 'http://localhost:5173',
+  LIVEKIT_URL: process.env.LIVEKIT_URL ?? 'wss://live.freischule.info',
+  LIVEKIT_API_KEY: process.env.LIVEKIT_API_KEY ?? '',
+  LIVEKIT_API_SECRET: process.env.LIVEKIT_API_SECRET ?? '',
 } as const;

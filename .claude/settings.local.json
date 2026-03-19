@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"livekit\\\\|webrtc\\\\|media\\\\|stream\\\\|video\\\\|audio\" /c/Users/Kurt/git/VirtualOffice --include=*.ts --include=*.tsx --include=*.json)",
+      "Bash(grep -E \"\\\\.ts$|\\\\.tsx$\")",
+      "Bash(xargs grep:*)"
+    ]
+  }
+}

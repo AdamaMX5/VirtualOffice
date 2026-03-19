@@ -40,6 +40,7 @@ export function usePresence() {
     ws.onopen = () => {
       reconnectDelay.current = 1000;
       setWsStatus('connected');
+      console.log('[WS] connected', wsUrl);
 
       if (!token) {
         // Gast: Namen senden
@@ -52,6 +53,9 @@ export function usePresence() {
 
     ws.onmessage = (e: MessageEvent<string>) => {
       const data = JSON.parse(e.data) as WsInbound;
+      console.log('[WS in]', data.type, data.type === 'snapshot'
+        ? `(${data.users.length} users: ${data.users.map(u => u.user_id).join(', ')})`
+        : 'user_id' in data ? data.user_id : '');
       switch (data.type) {
         case 'snapshot':
           applySnapshot(data.users);
@@ -74,7 +78,10 @@ export function usePresence() {
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
+      console.log('[WS] closed — code:', ev.code, 'reason:', ev.reason, 'intentional:', intentional.current);
+      // Ignorieren wenn dieser Socket bereits durch einen neueren ersetzt wurde
+      if (socketRef.current !== ws) return;
       if (intentional.current) return;
       setWsStatus('reconnecting');
       resetUsers();
@@ -85,7 +92,7 @@ export function usePresence() {
       reconnectDelay.current = Math.min(delay * 2, MAX_DELAY);
     };
 
-    ws.onerror = () => console.warn('[WS] Verbindungsfehler');
+    ws.onerror = (ev) => console.warn('[WS] error', ev);
   }, [setStatus, setWsStatus, applySnapshot, addOrUpdateUser, moveUser, removeUser, resetUsers, setReconnectDelay]);
 
   // Verbindung aufbauen / neu aufbauen wenn jwt oder name sich ändert
@@ -93,11 +100,10 @@ export function usePresence() {
     // Nur verbinden wenn der User einen Namen hat
     if (!name || name === '...') return;
 
-    // Alte Verbindung schließen
+    // Alte Verbindung schließen — socketRef wird gleich überschrieben,
+    // onclose ignoriert den alten Socket wegen socketRef.current !== ws
     if (socketRef.current && socketRef.current.readyState !== WebSocket.CLOSED) {
-      intentional.current = true;
       socketRef.current.close();
-      intentional.current = false;
     }
 
     connect();

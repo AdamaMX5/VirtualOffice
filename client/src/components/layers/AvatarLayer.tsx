@@ -14,6 +14,7 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY }: {
     <Layer x={x} y={y} scaleX={scaleX} scaleY={scaleY}>
       {/* Remote-User (mit Tween-Animation) */}
       {Object.values(remoteUsers).map((user) => {
+        const isBot = user.user_id.startsWith('bot_');
         const label = user.department ? `${user.name} · ${user.department}` : user.name;
         return (
           <SmileyAvatar
@@ -22,7 +23,8 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY }: {
             y={user.y}
             name={label}
             isPlayer={false}
-            animate={true}
+            isBot={isBot}
+            animate={!isBot}
           />
         );
       })}
