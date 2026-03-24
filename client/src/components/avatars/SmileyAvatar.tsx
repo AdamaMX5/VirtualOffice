@@ -8,10 +8,11 @@ interface SmileyAvatarProps {
   y: number;          // Welt-Y in Tile-Einheiten
   name: string;
   isPlayer?: boolean;
+  isBot?: boolean;
   animate?: boolean;  // true für Remote-User (Konva-Tween)
 }
 
-const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, animate = false }: SmileyAvatarProps) => {
+const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false }: SmileyAvatarProps) => {
   const groupRef = useRef<Konva.Group>(null);
 
   // Smooth-Interpolation für Remote-User per Konva-Tween
@@ -31,8 +32,8 @@ const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, animate = false
       {/* Gesicht */}
       <Circle
         radius={16}
-        fill={isPlayer ? '#facc15' : '#60a5fa'}
-        stroke={isPlayer ? '#ca8a04' : '#2563eb'}
+        fill={isPlayer ? '#facc15' : isBot ? '#4ade80' : '#60a5fa'}
+        stroke={isPlayer ? '#ca8a04' : isBot ? '#16a34a' : '#2563eb'}
         strokeWidth={2}
       />
 
@@ -58,12 +59,32 @@ const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, animate = false
         <Circle radius={21} stroke="#fde68a" strokeWidth={1.5} dash={[4, 3]} opacity={0.7} />
       )}
 
+      {/* Bot-Headset */}
+      {isBot && (
+        <>
+          {/* Headset-Bogen oben */}
+          <Shape
+            sceneFunc={(ctx, shape) => {
+              ctx.beginPath();
+              ctx.arc(0, -4, 19, Math.PI * 1.1, Math.PI * 1.9);
+              ctx.strokeShape(shape);
+            }}
+            stroke="#15803d"
+            strokeWidth={3}
+            lineCap="round"
+          />
+          {/* Headset-Muscheln */}
+          <Circle x={-19} y={-4} radius={4} fill="#15803d" />
+          <Circle x={19}  y={-4} radius={4} fill="#15803d" />
+        </>
+      )}
+
       {/* Name-Label */}
       <Text
         text={name}
         fontSize={10}
-        fill={isPlayer ? '#fef9c3' : '#dbeafe'}
-        fontStyle={isPlayer ? 'bold' : 'normal'}
+        fill={isPlayer ? '#fef9c3' : isBot ? '#dcfce7' : '#dbeafe'}
+        fontStyle={isPlayer || isBot ? 'bold' : 'normal'}
         x={-70} y={21}
         width={140}
         align="center"

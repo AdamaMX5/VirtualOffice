@@ -5,6 +5,8 @@ import BuildingLayer from './layers/BuildingLayer';
 import AvatarLayer from './layers/AvatarLayer';
 import HUD from './hud/HUD';
 import ControlsHint from './hud/ControlsHint';
+import VideoGrid from './media/VideoGrid';
+import MediaControls from './media/MediaControls';
 import { usePresence } from '../hooks/usePresence';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { useCamera } from '../hooks/useCamera';
@@ -98,6 +100,8 @@ const OfficeCanvas = () => {
       {/* HTML-Overlays außerhalb des Canvas */}
       <HUD />
       <ControlsHint />
+      <VideoGrid />
+      <MediaControls />
     </div>
   );
 };
