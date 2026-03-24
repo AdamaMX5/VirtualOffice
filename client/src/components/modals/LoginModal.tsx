@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuthStore } from '../../model/stores/authStore';
 import { usePlayerStore } from '../../model/stores/playerStore';
 import { apiPost } from '../../services/apiClient';
+import { AUTH_URL } from '../../model/constants';
 
 type Step = 'guest_or_login' | 'confirm_register';
 
@@ -71,7 +72,7 @@ const LoginModal = () => {
   async function handleLogin() {
     setLoading(true); setError(''); setInfo('');
     try {
-      const data = await apiPost<LoginResponse>('/api/auth/login', {
+      const data = await apiPost<LoginResponse>(`${AUTH_URL}/user/login`, {
         email,
         password,
         deviceFingerprint: navigator.userAgent,
@@ -99,7 +100,7 @@ const LoginModal = () => {
   async function handleRegister() {
     setLoading(true); setError('');
     try {
-      const data = await apiPost<RegisterResponse>('/api/auth/register', {
+      const data = await apiPost<RegisterResponse>(`${AUTH_URL}/user/register`, {
         userid: userId,
         repassword,
       });

@@ -85,6 +85,11 @@ export function useLiveKit() {
       store.setStatus('connected');
       store.setRoomName(roomName);
       syncParticipants();
+
+      await room.localParticipant.setMicrophoneEnabled(true);
+      await room.localParticipant.setCameraEnabled(true);
+      store.setMicEnabled(true);
+      store.setCamEnabled(true);
     } catch (err) {
       _room = null;
       store.setStatus('error');

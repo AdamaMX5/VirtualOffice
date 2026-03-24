@@ -148,9 +148,15 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
 
   return (
     <div style={tileStyle}>
-      {hasCam ? (
-        <video ref={videoRef} autoPlay playsInline muted={isLocal} style={videoStyle} />
-      ) : (
+      {/* Video immer im DOM – damit videoRef beim attach() verfügbar ist */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isLocal}
+        style={{ ...videoStyle, display: hasCam ? 'block' : 'none' }}
+      />
+      {!hasCam && (
         <div style={placeholderStyle}>
           <span style={{ fontSize: 28 }}>👤</span>
           <span>{displayName}</span>

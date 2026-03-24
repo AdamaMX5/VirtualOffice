@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '../model/stores/authStore';
 import { apiPost } from '../services/apiClient';
+import { AUTH_URL } from '../model/constants';
 
 interface UseTokenRefreshOptions {
   onNewToken: (token: string) => void;
@@ -20,7 +21,7 @@ export function useTokenRefresh({ onNewToken }: UseTokenRefreshOptions) {
 
     const timer = setInterval(async () => {
       try {
-        const data = await apiPost<{ accessToken: string }>('/api/auth/refresh', {});
+        const data = await apiPost<{ accessToken: string }>(`${AUTH_URL}/user/refresh`, {});
         if (data.accessToken) {
           setJwt(data.accessToken, email);
           onNewToken(data.accessToken);

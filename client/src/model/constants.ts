@@ -7,6 +7,7 @@ export const ZOOM_MIN  = 0.15;        // wird durch minScale() überschrieben
 export const CAM_SPEED = 5;           // Pixel/Frame für Pfeil-Kamerasteuerung
 export const SEND_INTERVAL = 50;      // ms zwischen WS-Positionsupdates
 
-// Backend-URLs – in Produktion vom Vite-Proxy durch den Node-Server weitergeleitet
-export const WS_PATH   = '/ws';   // Vite-Proxy → ws://localhost:3000/ws → PresenceService
-export const API_PATH  = '/api';  // Vite-Proxy → http://localhost:3000/api
+// Backend-URLs – direkt zu den Microservices
+export const AUTH_URL         = import.meta.env.VITE_AUTH_URL         ?? 'https://auth.freischule.info';
+export const PRESENCE_WS_URL  = import.meta.env.VITE_PRESENCE_WS_URL  ?? 'wss://presence.freischule.info';
+export const WS_PATH          = `${PRESENCE_WS_URL}/ws`;
