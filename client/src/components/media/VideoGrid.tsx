@@ -128,10 +128,10 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       ParticipantEvent.TrackPublished,
       ParticipantEvent.TrackUnpublished,
     ];
-    events.forEach((ev) => participant.on(ev, reattach));
+    events.forEach((ev) => participant.on(ev as never, reattach as never));
 
     return () => {
-      events.forEach((ev) => participant.off(ev, reattach));
+      events.forEach((ev) => participant.off(ev as never, reattach as never));
       detach();
     };
   }, [participant]);
