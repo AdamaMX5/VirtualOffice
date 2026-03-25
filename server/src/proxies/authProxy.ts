@@ -21,7 +21,7 @@ export async function proxyLogin(
   deviceFingerprint?: string,
   deviceName?: string
 ): Promise<ProxyResult> {
-  const res = await fetch(`${config.AUTH_URL}/login`, {
+  const res = await fetch(`${config.AUTH_URL}/user/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -42,7 +42,7 @@ export async function proxyRegister(
   userid: string,
   repassword: string
 ): Promise<ProxyResult> {
-  const res = await fetch(`${config.AUTH_URL}/register`, {
+  const res = await fetch(`${config.AUTH_URL}/user/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userid, repassword }),
