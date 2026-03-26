@@ -40,7 +40,7 @@ export function startReceptionBot(): void {
     ws.on('open', () => {
       reconnectDelay = 2_000;
       console.log('[Bot] Connected to PresenceService');
-      send({ type: 'set_name', name: 'Empfang' });
+      send({ type: 'set_name', name: 'Empfang', department: 'bot' });
       send({ type: 'move', x: BOT_X, y: BOT_Y });
       startWandering();
     });
