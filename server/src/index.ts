@@ -1,5 +1,4 @@
 import 'dotenv/config';
-import http from 'http';
 import path from 'path';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -8,7 +7,7 @@ import { AccessToken } from 'livekit-server-sdk';
 
 import { config } from './config';
 import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxies/authProxy';
-import { setupPresence } from './presence';
+import { startReceptionBot } from './presence';
 
 const app = express();
 
@@ -91,11 +90,12 @@ app.get('*path', (_req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 
-// ── HTTP-Server mit WS-Upgrade-Unterstützung ─────────────────
+// ── Reception-Bot (verbindet sich als Client zum PresenceService) ──
 
-const httpServer = http.createServer(app);
-setupPresence(httpServer);
+startReceptionBot();
 
-httpServer.listen(config.PORT, () => {
+// ── HTTP-Server ───────────────────────────────────────────────
+
+app.listen(config.PORT, () => {
   console.log(`Server läuft auf http://localhost:${config.PORT}`);
 });
