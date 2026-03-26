@@ -58,7 +58,6 @@ const LoginModal = () => {
   const [email,      setEmail]      = useState('');
   const [password,   setPassword]   = useState('');
   const [repassword, setRepassword] = useState('');
-  const [userId,     setUserId]     = useState('');
   const [error,      setError]      = useState('');
   const [info,       setInfo]       = useState('');
   const [loading,    setLoading]    = useState(false);
@@ -87,7 +86,6 @@ const LoginModal = () => {
         setName(data.email);
         closeModal();
       } else if (data.status === 'register') {
-        setUserId(data.id ?? '');
         setStep('confirm_register');
         setInfo('Neuer Account – bitte Passwort bestätigen.');
       }
@@ -101,8 +99,10 @@ const LoginModal = () => {
     setLoading(true); setError('');
     try {
       const data = await apiPost<RegisterResponse>(`${AUTH_URL}/user/register`, {
-        userid: userId,
+        email,
         repassword,
+        deviceFingerprint: navigator.userAgent,
+        deviceName: 'Virtual Office Web',
       });
       setJwt(data.accessToken, data.email);
       setName(data.email);

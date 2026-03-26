@@ -26,6 +26,7 @@ export function usePresence() {
   const connect = useCallback(() => {
     if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
 
+    intentional.current = false;
     setWsStatus('connecting');
     setStatus('connecting');
 
