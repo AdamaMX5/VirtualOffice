@@ -7,4 +7,6 @@ export const config = {
   LIVEKIT_URL: process.env.LIVEKIT_URL ?? 'https://live.freischule.info',
   LIVEKIT_API_KEY: process.env.LIVEKIT_API_KEY ?? 'devkey',
   LIVEKIT_API_SECRET: process.env.LIVEKIT_API_SECRET ?? 'devsecret',
+  // Required for GET /admin/logs. Set a strong random secret in production.
+  ADMIN_SECRET: process.env.ADMIN_SECRET,
 } as const;

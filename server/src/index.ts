@@ -6,14 +6,22 @@ import cors from 'cors';
 import { AccessToken } from 'livekit-server-sdk';
 
 import { config } from './config';
+import { installConsoleCapture } from './logBuffer';
+import { requestIdMiddleware } from './middleware/requestId';
+import adminLogsRouter from './routers/adminLogs';
 import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxies/authProxy';
 import { startReceptionBot } from './presence';
 
+installConsoleCapture();
+
 const app = express();
 
+app.use(requestIdMiddleware);
 app.use(cookieParser());
 app.use(cors({ origin: config.CLIENT_ORIGIN, credentials: true }));
 app.use(express.json());
+
+app.use(adminLogsRouter);
 
 // ── Auth ──────────────────────────────────────────────────────
 
