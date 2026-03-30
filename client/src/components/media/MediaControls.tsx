@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useLiveKit } from '../../hooks/useLiveKit';
+import { reloadAllVideos } from '../../services/videoRegistry';
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,11 @@ const MediaControls: React.FC = () => {
         onClick={toggleSpeaker}
       >
         {speakerEnabled ? '🔊' : '🔕'}
+      </button>
+
+      {/* Video-Streams neu laden */}
+      <button style={btnBase} title="Video-Streams neu laden" onClick={reloadAllVideos}>
+        🔄
       </button>
 
       {/* Hang up */}

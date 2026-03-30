@@ -1,21 +1,39 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Layer } from 'react-konva';
+import Konva from 'konva';
+import type KonvaType from 'konva';
 import { usePlayerStore } from '../../model/stores/playerStore';
 import { usePresenceStore } from '../../model/stores/presenceStore';
+import { useLiveKitStore } from '../../model/stores/liveKitStore';
+import { videoRegistry } from '../../services/videoRegistry';
 import SmileyAvatar from '../avatars/SmileyAvatar';
 
 const AvatarLayer = React.memo(({ x, y, scaleX, scaleY }: {
   x: number; y: number; scaleX: number; scaleY: number;
 }) => {
   const { wx, wy, name } = usePlayerStore();
-  const remoteUsers = usePresenceStore((s) => s.remoteUsers);
+  const remoteUsers  = usePresenceStore((s) => s.remoteUsers);
+  // trackVersion als Re-Render-Trigger wenn Video-Tracks sich ändern
+  useLiveKitStore((s) => s.trackVersion);
+
+  const layerRef = useRef<KonvaType.Layer>(null);
+
+  // Konva-Animation: rendert Video-Frames kontinuierlich neu
+  useEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) return;
+    const anim = new Konva.Animation(() => {}, layer);
+    anim.start();
+    return () => { anim.stop(); };
+  }, []);
 
   return (
-    <Layer x={x} y={y} scaleX={scaleX} scaleY={scaleY}>
+    <Layer ref={layerRef} x={x} y={y} scaleX={scaleX} scaleY={scaleY}>
       {/* Remote-User (mit Tween-Animation) */}
       {Object.values(remoteUsers).map((user) => {
-        const isBot = user.user_id.startsWith('bot_') || user.name.endsWith('_Bot');
-        const label = user.department ? `${user.name} · ${user.department}` : user.name;
+        const isBot   = user.user_id.startsWith('bot_') || user.name.endsWith('_Bot');
+        const label   = user.department ? `${user.name} · ${user.department}` : user.name;
+        const videoEl = videoRegistry.getActive(user.name);
         return (
           <SmileyAvatar
             key={user.user_id}
@@ -25,6 +43,7 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY }: {
             isPlayer={false}
             isBot={isBot}
             animate={!isBot}
+            videoElement={videoEl}
           />
         );
       })}
@@ -36,6 +55,7 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY }: {
         name={name}
         isPlayer={true}
         animate={false}
+        videoElement={videoRegistry.getActive(name)}
       />
     </Layer>
   );
