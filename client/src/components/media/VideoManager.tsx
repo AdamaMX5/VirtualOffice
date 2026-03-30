@@ -38,8 +38,11 @@ const ParticipantMedia: React.FC<MediaProps> = ({ participant, isLocal, speakerE
       if (videoEl) {
         if (hasCam) {
           (camPub!.track as { attach(el: HTMLVideoElement): void }).attach(videoEl);
-          // Schwarzbild-Fix: kurz nach attach play() erzwingen
-          setTimeout(() => videoEl.play().catch(() => {}), 50);
+          // Mehrfach versuchen: sofort, bei canplay und nach 300 ms
+          const tryPlay = () => videoEl.play().catch(() => {});
+          tryPlay();
+          videoEl.addEventListener('canplay', tryPlay, { once: true });
+          setTimeout(tryPlay, 300);
         } else if (camPub?.track) {
           (camPub.track as { detach(el: HTMLVideoElement): void }).detach(videoEl);
         }
@@ -84,7 +87,8 @@ const ParticipantMedia: React.FC<MediaProps> = ({ participant, isLocal, speakerE
 
   return (
     <>
-      <video ref={videoRef} autoPlay playsInline muted={isLocal} />
+      {/* Explizite Größe damit der Browser Video-Frames wirklich dekodiert */}
+      <video ref={videoRef} autoPlay playsInline muted={isLocal} width={2} height={2} />
       <audio ref={audioRef} autoPlay muted={isLocal || !speakerEnabled} />
     </>
   );

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Group, Circle, Shape, Text, Image } from 'react-konva';
+import { Group, Circle, Shape, Text } from 'react-konva';
 import type Konva from 'konva';
 import { P } from '../../model/constants';
 
@@ -31,15 +31,27 @@ const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, 
       <Circle radius={16} fill="rgba(0,0,0,0.18)" x={-2} y={4} />
 
       {videoElement ? (
-        /* ── Video-Kreis-Modus ── */
+        /* ── Video-Kreis-Modus (Radius 24, ragt über den Smiley-Ring hinaus) ── */
         <>
-          {/* Video kreisförmig zuschneiden */}
-          <Group clipFunc={(ctx) => { ctx.arc(0, 0, 16, 0, Math.PI * 2); }}>
-            <Image image={videoElement} x={-16} y={-16} width={32} height={32} />
+          {/* Kreisförmiger Clip + Video mit objectFit:cover */}
+          <Group clipFunc={(ctx) => { ctx.arc(0, 0, 24, 0, Math.PI * 2); }}>
+            <Shape
+              listening={false}
+              sceneFunc={(ctx) => {
+                const v = videoElement;
+                if (!v || v.readyState < 2) return;
+                const vw = v.videoWidth;
+                const vh = v.videoHeight;
+                if (!vw || !vh) return;
+                // objectFit: cover – kürzere Seite füllt den Durchmesser
+                const s = 48 / Math.min(vw, vh);
+                (ctx as any)._context.drawImage(v, -(vw * s) / 2, -(vh * s) / 2, vw * s, vh * s);
+              }}
+            />
           </Group>
           {/* Rand-Ring über dem Video */}
           <Circle
-            radius={16}
+            radius={24}
             fill="transparent"
             stroke={isPlayer ? '#ca8a04' : isBot ? '#16a34a' : '#2563eb'}
             strokeWidth={2}

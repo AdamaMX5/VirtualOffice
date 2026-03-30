@@ -1,6 +1,5 @@
 import React, { useRef, useEffect } from 'react';
 import { Layer } from 'react-konva';
-import Konva from 'konva';
 import type KonvaType from 'konva';
 import { usePlayerStore } from '../../model/stores/playerStore';
 import { usePresenceStore } from '../../model/stores/presenceStore';
@@ -18,13 +17,16 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY }: {
 
   const layerRef = useRef<KonvaType.Layer>(null);
 
-  // Konva-Animation: rendert Video-Frames kontinuierlich neu
+  // Eigener RAF-Loop: ruft layer.draw() direkt auf, damit Video-Frames
+  // jeden Frame neu gezeichnet werden (Konva.Animation batcht zu aggressiv).
   useEffect(() => {
-    const layer = layerRef.current;
-    if (!layer) return;
-    const anim = new Konva.Animation(() => {}, layer);
-    anim.start();
-    return () => { anim.stop(); };
+    let rafId: number;
+    const tick = () => {
+      layerRef.current?.draw();
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, []);
 
   return (
