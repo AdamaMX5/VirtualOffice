@@ -100,10 +100,22 @@ export function useLiveKit() {
   // ── disconnect ─────────────────────────────────────────────────────────────
 
   const disconnect = useCallback(async () => {
-    await _room?.disconnect();
+    const room = _room;
     _room = null;
     store.reset();
+    await room?.disconnect();
   }, [store]);
+
+  // ── switchRoom ─────────────────────────────────────────────────────────────
+
+  const switchRoom = useCallback(async (roomName: string) => {
+    if (useLiveKitStore.getState().roomName === roomName) return;
+    const room = _room;
+    _room = null;
+    store.reset();
+    await room?.disconnect();
+    await connect(roomName);
+  }, [connect, store]);
 
   // ── media toggles ──────────────────────────────────────────────────────────
 
@@ -135,5 +147,5 @@ export function useLiveKit() {
     });
   }, [store]);
 
-  return { connect, disconnect, toggleMic, toggleCam, toggleSpeaker };
+  return { connect, disconnect, switchRoom, toggleMic, toggleCam, toggleSpeaker };
 }

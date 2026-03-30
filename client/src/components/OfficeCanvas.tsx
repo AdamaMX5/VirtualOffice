@@ -7,10 +7,12 @@ import HUD from './hud/HUD';
 import ControlsHint from './hud/ControlsHint';
 import VideoManager from './media/VideoManager';
 import MediaControls from './media/MediaControls';
+import MeetingOverlay from './meeting/MeetingOverlay';
 import { usePresence } from '../hooks/usePresence';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { useCamera } from '../hooks/useCamera';
 import { useTokenRefresh } from '../hooks/useTokenRefresh';
+import { useMeetingRoom } from '../hooks/useMeetingRoom';
 import { useCameraStore } from '../model/stores/cameraStore';
 
 function useStageSize() {
@@ -26,9 +28,13 @@ function useStageSize() {
 const OfficeCanvas = () => {
   const size = useStageSize();
   const { scale, offset } = useCameraStore();
+  const [showMeeting, setShowMeeting] = useState(false);
 
   // Presence-WebSocket
   const { sendMove, sendRefreshToken } = usePresence();
+
+  // Auto-Connect zum Meeting-Raum beim Betreten
+  useMeetingRoom();
 
   // Token-Refresh
   useTokenRefresh({
@@ -98,10 +104,11 @@ const OfficeCanvas = () => {
       </Stage>
 
       {/* HTML-Overlays außerhalb des Canvas */}
-      <HUD />
+      <HUD onOpenMeeting={() => setShowMeeting(true)} />
       <ControlsHint />
       <VideoManager />
       <MediaControls />
+      {showMeeting && <MeetingOverlay onClose={() => setShowMeeting(false)} />}
     </div>
   );
 };

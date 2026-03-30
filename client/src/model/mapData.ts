@@ -33,3 +33,16 @@ export const WALLS: Wall[] = [
   { f:[35,80], t:[35,68], type:'wall' },
   { f:[58,68], t:[62,68], type:'door' },
 ];
+
+/** Gibt den Raum-Label zurück, in dem sich Position (wx, wy) befindet, sonst null. */
+export function getRoomAtPos(wx: number, wy: number): string | null {
+  for (const room of ROOMS) {
+    const xs = room.pts.filter((_, i) => i % 2 === 0);
+    const ys = room.pts.filter((_, i) => i % 2 !== 0);
+    if (wx >= Math.min(...xs) && wx <= Math.max(...xs) &&
+        wy >= Math.min(...ys) && wy <= Math.max(...ys)) {
+      return room.label;
+    }
+  }
+  return null;
+}

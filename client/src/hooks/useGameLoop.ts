@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useCameraStore } from '../model/stores/cameraStore';
 import { MAP, WALK, SPRINT, SEND_INTERVAL } from '../model/constants';
+import { getRoomAtPos } from '../model/mapData';
 import { useKeyboard } from './useKeyboard';
 
 interface GameLoopOptions {
@@ -13,11 +14,13 @@ interface GameLoopOptions {
 
 export function useGameLoop({ sendMove, stageWidth, stageHeight }: GameLoopOptions) {
   const keys = useKeyboard();
-  const setPosition = usePlayerStore((s) => s.setPosition);
+  const setPosition    = usePlayerStore((s) => s.setPosition);
+  const setCurrentRoom = usePlayerStore((s) => s.setCurrentRoom);
   const { setOffset, setFollow } = useCameraStore();
 
   // Stabile Refs für rAF-Closure (kein Stale-Closure-Problem)
   const posRef      = useRef({ wx: 60.0, wy: 45.0 });
+  const roomRef     = useRef<string | null>(null);
   const scaleRef    = useRef(1.5);
   const offsetRef   = useRef({ x: 0, y: 0 });
   const followRef   = useRef(true);
@@ -85,6 +88,13 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight }: GameLoopOptio
         const newWy = Math.max(0, Math.min(MAP.h, posRef.current.wy + dy * spd));
         posRef.current = { wx: newWx, wy: newWy };
         setPosition(newWx, newWy);
+
+        // Raum-Erkennung: nur bei Wechsel in den Store schreiben
+        const newRoom = getRoomAtPos(newWx, newWy);
+        if (newRoom !== roomRef.current) {
+          roomRef.current = newRoom;
+          setCurrentRoom(newRoom);
+        }
 
         if (followRef.current) {
           const newOffset = {

@@ -3,6 +3,7 @@ import { usePlayerStore } from '../../model/stores/playerStore';
 import { usePresenceStore } from '../../model/stores/presenceStore';
 import { useCameraStore } from '../../model/stores/cameraStore';
 import { useAuthStore } from '../../model/stores/authStore';
+import { useLiveKitStore } from '../../model/stores/liveKitStore';
 
 const hudStyle: React.CSSProperties = {
   position: 'fixed',
@@ -40,6 +41,19 @@ const loginBtnStyle: React.CSSProperties = {
   pointerEvents: 'all',
 };
 
+const meetingBtnStyle: React.CSSProperties = {
+  background: 'rgba(139,92,246,0.7)',
+  border: '1px solid rgba(167,139,250,0.5)',
+  borderRadius: 8,
+  padding: '7px 14px',
+  color: '#fff',
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: 'pointer',
+  letterSpacing: '0.03em',
+  pointerEvents: 'all',
+};
+
 function wsStatusColor(status: string): string {
   if (status === 'connected')    return '#86efac';
   if (status === 'connecting')   return '#fbbf24';
@@ -54,14 +68,21 @@ function wsStatusLabel(status: string): string {
   return '🔴 Nicht verbunden';
 }
 
-const HUD = () => {
-  const { wx, wy } = usePlayerStore();
-  const scale      = useCameraStore((s) => s.scale);
-  const wsStatus   = usePresenceStore((s) => s.wsStatus);
-  const authStatus = useAuthStore((s) => s.authStatus);
-  const openModal  = useAuthStore((s) => s.openModal);
+interface HUDProps {
+  onOpenMeeting?: () => void;
+}
 
-  const showLoginBtn = authStatus !== 'connected_auth';
+const HUD = ({ onOpenMeeting }: HUDProps) => {
+  const { wx, wy, currentRoom } = usePlayerStore();
+  const scale         = useCameraStore((s) => s.scale);
+  const wsStatus      = usePresenceStore((s) => s.wsStatus);
+  const authStatus    = useAuthStore((s) => s.authStatus);
+  const openModal     = useAuthStore((s) => s.openModal);
+  const liveKitStatus = useLiveKitStore((s) => s.status);
+
+  const showLoginBtn   = authStatus !== 'connected_auth';
+  const inMeeting      = currentRoom === 'Meetingraum';
+  const meetingReady   = inMeeting && liveKitStatus === 'connected';
 
   return (
     <div style={hudStyle}>
@@ -74,6 +95,16 @@ const HUD = () => {
       <div style={badgeStyle}>
         Zoom: <span style={spanStyle}>{Math.round(scale * 100)}%</span>
       </div>
+      {inMeeting && !meetingReady && (
+        <div style={badgeStyle}>
+          <span style={{ color: '#fbbf24' }}>⏳ Meetingraum wird verbunden...</span>
+        </div>
+      )}
+      {meetingReady && (
+        <button style={meetingBtnStyle} onClick={onOpenMeeting}>
+          📺 Ansicht
+        </button>
+      )}
       {showLoginBtn && (
         <button style={loginBtnStyle} onClick={openModal}>
           🔑 Einloggen
