@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useReducer } from 'react';
 import { Participant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { getRoom } from '../../hooks/useLiveKit';
+import { useRecording } from '../../hooks/useRecording';
 
 // ── Grid-Berechnung ───────────────────────────────────────────────────────────
 
@@ -106,8 +107,9 @@ interface OverlayProps {
 }
 
 const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
-  const participantIds  = useLiveKitStore((s) => s.participantIds);
-  const speakerEnabled  = useLiveKitStore((s) => s.speakerEnabled);
+  const participantIds = useLiveKitStore((s) => s.participantIds);
+  const speakerEnabled = useLiveKitStore((s) => s.speakerEnabled);
+  const { isRecording, startRecording, stopRecording } = useRecording();
 
   const room = getRoom();
   if (!room) return null;
@@ -116,9 +118,20 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
     .map((id) => room.remoteParticipants.get(id))
     .filter((p): p is NonNullable<typeof p> => p != null);
 
-  // Alle Teilnehmer: eigene Person + Remote
   const total = 1 + remoteParticipants.length;
   const { cols, rows } = gridDims(total);
+
+  const btnBase: React.CSSProperties = {
+    background: 'rgba(15,15,19,0.85)',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: 8,
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 600,
+    padding: '6px 14px',
+    backdropFilter: 'blur(8px)',
+  };
 
   return (
     <div style={{
@@ -132,43 +145,44 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
       gap: 0,
     }}>
       {/* Eigene Kachel zuerst */}
-      <MeetingTile
-        participant={room.localParticipant}
-        isLocal
-        speakerEnabled={speakerEnabled}
-      />
+      <MeetingTile participant={room.localParticipant} isLocal speakerEnabled={speakerEnabled} />
 
       {/* Remote-Teilnehmer */}
       {remoteParticipants.map((p) => (
-        <MeetingTile
-          key={p.identity}
-          participant={p}
-          isLocal={false}
-          speakerEnabled={speakerEnabled}
-        />
+        <MeetingTile key={p.identity} participant={p} isLocal={false} speakerEnabled={speakerEnabled} />
       ))}
 
-      {/* Schließen-Button */}
-      <button
-        onClick={onClose}
-        style={{
-          position: 'fixed',
-          top: 16,
-          right: 16,
-          zIndex: 401,
-          background: 'rgba(15,15,19,0.85)',
-          border: '1px solid rgba(255,255,255,0.15)',
-          borderRadius: 8,
-          color: '#fff',
-          cursor: 'pointer',
-          fontSize: 13,
-          fontWeight: 600,
-          padding: '6px 14px',
-          backdropFilter: 'blur(8px)',
-        }}
-      >
-        ✕ Ansicht schließen
-      </button>
+      {/* Steuer-Leiste oben rechts */}
+      <div style={{
+        position: 'fixed',
+        top: 16,
+        right: 16,
+        zIndex: 401,
+        display: 'flex',
+        gap: 8,
+      }}>
+        {/* Aufnahme-Button */}
+        <button
+          onClick={isRecording ? stopRecording : startRecording}
+          style={{
+            ...btnBase,
+            background: isRecording
+              ? 'rgba(220,38,38,0.85)'
+              : 'rgba(15,15,19,0.85)',
+            border: isRecording
+              ? '1px solid rgba(239,68,68,0.7)'
+              : '1px solid rgba(255,255,255,0.15)',
+          }}
+          title={isRecording ? 'Aufnahme stoppen (WebM-Dateien werden heruntergeladen)' : 'Aufnahme starten'}
+        >
+          {isRecording ? '⏹ Aufnahme stoppen' : '⏺ Aufnahme starten'}
+        </button>
+
+        {/* Schließen-Button */}
+        <button onClick={onClose} style={btnBase}>
+          ✕ Ansicht schließen
+        </button>
+      </div>
     </div>
   );
 };

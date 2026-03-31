@@ -3,7 +3,7 @@ import path from 'path';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import { AccessToken } from 'livekit-server-sdk';
+import { AccessToken, EgressClient, EncodedFileOutput, EncodedFileType } from 'livekit-server-sdk';
 
 import { config } from './config';
 import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxies/authProxy';
@@ -74,6 +74,44 @@ app.post('/api/livekit/token', async (req, res) => {
   at.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true });
   const token = await at.toJwt();
   res.json({ token, url: config.LIVEKIT_URL });
+});
+
+// ── LiveKit Egress (Server-seitige Aufnahme) ──────────────────
+
+app.post('/api/livekit/egress/start', async (req, res) => {
+  const { room } = req.body as { room: string };
+  if (!config.LIVEKIT_API_KEY || !config.LIVEKIT_API_SECRET) {
+    res.status(500).json({ error: 'LiveKit nicht konfiguriert' });
+    return;
+  }
+  try {
+    const client = new EgressClient(config.LIVEKIT_URL, config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET);
+    const info = await client.startRoomCompositeEgress(
+      room,
+      new EncodedFileOutput({
+        fileType: EncodedFileType.MP4,
+        filepath: `recordings/${room}_{time}`,
+      }),
+    );
+    res.json({ egressId: info.egressId });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/livekit/egress/stop', async (req, res) => {
+  const { egressId } = req.body as { egressId: string };
+  if (!config.LIVEKIT_API_KEY || !config.LIVEKIT_API_SECRET) {
+    res.status(500).json({ error: 'LiveKit nicht konfiguriert' });
+    return;
+  }
+  try {
+    const client = new EgressClient(config.LIVEKIT_URL, config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET);
+    await client.stopEgress(egressId);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Client Config ─────────────────────────────────────────────
