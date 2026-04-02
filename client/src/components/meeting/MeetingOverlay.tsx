@@ -2,9 +2,10 @@
  * MeetingOverlay – Vollbild-Gitteransicht aller Teilnehmer.
  * Keine Namen, keine Gitterlinien, alle Kacheln gleichgroß.
  */
-import React, { useEffect, useRef, useReducer } from 'react';
+import React, { useEffect, useRef, useReducer, useState, useCallback } from 'react';
 import { Participant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
+import { useParticipantVolumeStore } from '../../model/stores/participantVolumeStore';
 import { getRoom } from '../../hooks/useLiveKit';
 import { useRecording } from '../../hooks/useRecording';
 
@@ -17,6 +18,75 @@ function gridDims(n: number): { cols: number; rows: number } {
   const rows = Math.ceil(n / cols);
   return { cols, rows };
 }
+
+// ── VolumeMenu ────────────────────────────────────────────────────────────────
+
+interface VolumeMenuProps {
+  identity: string;
+  x: number;
+  y: number;
+  onClose: () => void;
+}
+
+const VolumeMenu: React.FC<VolumeMenuProps> = ({ identity, x, y, onClose }) => {
+  const volume    = useParticipantVolumeStore((s) => s.getVolume(identity));
+  const setVolume = useParticipantVolumeStore((s) => s.setVolume);
+
+  // Schließen bei Klick außerhalb
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-volume-menu]')) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      data-volume-menu
+      style={{
+        position: 'fixed',
+        left: x,
+        top: y,
+        zIndex: 600,
+        background: 'rgba(15,15,19,0.95)',
+        border: '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 10,
+        padding: '12px 16px',
+        minWidth: 200,
+        backdropFilter: 'blur(12px)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        color: '#fff',
+        fontSize: 13,
+      }}
+    >
+      <div style={{ fontWeight: 700, marginBottom: 10, opacity: 0.7 }}>
+        Lautstärke: {Math.round(volume * 100)} %
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={2}
+        step={0.05}
+        value={volume}
+        onChange={(e) => setVolume(identity, parseFloat(e.target.value))}
+        style={{ width: '100%', accentColor: '#4f8ef7', cursor: 'pointer' }}
+      />
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        opacity: 0.4,
+        fontSize: 11,
+        marginTop: 4,
+      }}>
+        <span>0%</span>
+        <span>100%</span>
+        <span>200%</span>
+      </div>
+    </div>
+  );
+};
 
 // ── MeetingTile ───────────────────────────────────────────────────────────────
 
@@ -31,6 +101,11 @@ const MeetingTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled
   const audioRef = useRef<HTMLAudioElement>(null);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
 
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const volume = useParticipantVolumeStore((s) => s.getVolume(participant.identity));
+
+  // Tracks an- und abhängen
   useEffect(() => {
     const reattach = () => {
       const camPub = participant.getTrackPublication(Track.Source.Camera);
@@ -62,14 +137,30 @@ const MeetingTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled
     };
   }, [participant]);
 
+  // Lautstärke des Audio-Elements reaktiv halten
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = Math.min(volume, 1); // HTMLAudioElement: max 1
+    }
+  }, [volume]);
+
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = isLocal || !speakerEnabled;
   }, [speakerEnabled, isLocal]);
 
   const hasCam = !!participant.getTrackPublication(Track.Source.Camera)?.track;
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    if (isLocal) return; // eigene Lautstärke macht keinen Sinn
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY });
+  }, [isLocal]);
+
   return (
-    <div style={{ position: 'relative', background: '#111', overflow: 'hidden' }}>
+    <div
+      style={{ position: 'relative', background: '#111', overflow: 'hidden' }}
+      onContextMenu={handleContextMenu}
+    >
       <video
         ref={videoRef}
         autoPlay
@@ -96,6 +187,33 @@ const MeetingTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled
         </div>
       )}
       <audio ref={audioRef} autoPlay muted={isLocal || !speakerEnabled} />
+
+      {/* Lautstärke-Indikator (nur remote, nur wenn abweichend) */}
+      {!isLocal && volume !== 1 && (
+        <div style={{
+          position: 'absolute',
+          bottom: 8,
+          right: 8,
+          background: 'rgba(0,0,0,0.6)',
+          borderRadius: 6,
+          padding: '2px 7px',
+          fontSize: 11,
+          color: volume === 0 ? '#ef4444' : '#facc15',
+          fontWeight: 700,
+          pointerEvents: 'none',
+        }}>
+          {volume === 0 ? '🔇' : `${Math.round(volume * 100)}%`}
+        </div>
+      )}
+
+      {menu && (
+        <VolumeMenu
+          identity={participant.identity}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 };
@@ -109,7 +227,12 @@ interface OverlayProps {
 const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
   const participantIds = useLiveKitStore((s) => s.participantIds);
   const speakerEnabled = useLiveKitStore((s) => s.speakerEnabled);
-  const { isRecording, startRecording, stopRecording } = useRecording();
+  const { isRecording, startRecording, stopRecording, tabHidden } = useRecording();
+
+  const handleClose = useCallback(() => {
+    if (isRecording) stopRecording();
+    onClose();
+  }, [isRecording, stopRecording, onClose]);
 
   const room = getRoom();
   if (!room) return null;
@@ -152,6 +275,26 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
         <MeetingTile key={p.identity} participant={p} isLocal={false} speakerEnabled={speakerEnabled} />
       ))}
 
+      {/* Tab-Warnung während Aufnahme */}
+      {isRecording && tabHidden && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 500,
+          background: 'rgba(220,38,38,0.92)',
+          color: '#fff',
+          textAlign: 'center',
+          padding: '10px 16px',
+          fontWeight: 700,
+          fontSize: 14,
+          backdropFilter: 'blur(4px)',
+        }}>
+          ⚠ Aufnahme läuft – Tab ist inaktiv! Das Video friert ein. Bitte Tab aktiv lassen.
+        </div>
+      )}
+
       {/* Steuer-Leiste oben rechts */}
       <div style={{
         position: 'fixed',
@@ -173,13 +316,13 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
               ? '1px solid rgba(239,68,68,0.7)'
               : '1px solid rgba(255,255,255,0.15)',
           }}
-          title={isRecording ? 'Aufnahme stoppen (WebM-Dateien werden heruntergeladen)' : 'Aufnahme starten'}
+          title={isRecording ? 'Aufnahme stoppen (WebM-Datei wird heruntergeladen)' : 'Aufnahme starten'}
         >
           {isRecording ? '⏹ Aufnahme stoppen' : '⏺ Aufnahme starten'}
         </button>
 
         {/* Schließen-Button */}
-        <button onClick={onClose} style={btnBase}>
+        <button onClick={handleClose} style={btnBase}>
           ✕ Ansicht schließen
         </button>
       </div>

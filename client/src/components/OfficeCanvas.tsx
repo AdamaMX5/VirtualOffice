@@ -45,7 +45,7 @@ const OfficeCanvas = () => {
   const { handleWheel, startDrag, updateDrag } = useCamera(size.w, size.h);
 
   // Game-Loop (WASD + Bewegung)
-  useGameLoop({
+  const { updateFromDrag } = useGameLoop({
     sendMove,
     stageWidth: size.w,
     stageHeight: size.h,
@@ -100,7 +100,7 @@ const OfficeCanvas = () => {
       >
         <GroundLayer   {...layerProps} />
         <BuildingLayer {...layerProps} />
-        <AvatarLayer   {...layerProps} />
+        <AvatarLayer   {...layerProps} updateFromDrag={updateFromDrag} />
       </Stage>
 
       {/* HTML-Overlays außerhalb des Canvas */}

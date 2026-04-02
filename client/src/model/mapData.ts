@@ -1,11 +1,14 @@
 import type { Room, Wall } from './types';
 
+// Betretbare Räume: Mittelgrau
+const ROOM_FILL = '#585858';
+
 export const ROOMS: Room[] = [
-  { label: 'Eingangshalle', fill: '#d4c9a8', pts: [47,48,73,48,73,62,47,62] },
-  { label: 'Flur',          fill: '#ccc4b0', pts: [47,62,73,62,73,68,47,68] },
-  { label: 'Büro A',        fill: '#b8d4c8', pts: [35,40,47,40,47,62,35,62] },
-  { label: 'Büro B',        fill: '#b8c4d4', pts: [73,40,85,40,85,62,73,62] },
-  { label: 'Meetingraum',   fill: '#d4b8c4', pts: [35,68,85,68,85,80,35,80] },
+  { label: 'Eingangshalle', fill: ROOM_FILL, pts: [47,48,73,48,73,62,47,62] },
+  { label: 'Flur',          fill: ROOM_FILL, pts: [47,62,73,62,73,68,47,68] },
+  { label: 'Büro A',        fill: ROOM_FILL, pts: [35,40,47,40,47,62,35,62] },
+  { label: 'Büro B',        fill: ROOM_FILL, pts: [73,40,85,40,85,62,73,62] },
+  { label: 'Meetingraum',   fill: ROOM_FILL, pts: [35,68,85,68,85,80,35,80] },
 ];
 
 export const WALLS: Wall[] = [

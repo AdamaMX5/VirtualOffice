@@ -1,132 +1,212 @@
 /**
- * useRecording – Aufzeichnung aller LiveKit-Teilnehmer als einzelne WebM-Dateien.
+ * useRecording – Nimmt das Meeting als eine einzige WebM-Datei auf.
  *
- * Format: WebM (VP9 + Opus) – der einzige native Browser-Standard für MediaRecorder.
- * MP4 wäre möglich mit `mp4-muxer` (WebCodecs), aber unnötig komplex.
- * Konvertierung falls nötig: ffmpeg -i input.webm output.mp4
+ * Ansatz: offscreen <canvas> compositet alle Teilnehmer-Videos frame-genau.
+ * → kein Mauszeiger, keine HUD-Elemente (ContextMenus, Einstellungen).
+ * Audio: AudioContext mischt alle Mikrofon-Tracks zu einer Spur (mit GainNodes
+ * pro Teilnehmer, die live auf den participantVolumeStore reagieren).
  *
- * Synchronisation: Alle Recorder starten im selben synchronen JS-Loop-Tick
- * (kein await dazwischen) → frame-genaue Synchronität.
- * Gemeinsamer Session-Timestamp im Dateinamen dient als Referenz.
+ * Datei-Ausgabe:
+ *   Primär: File System Access API (showSaveFilePicker) → wachsende Datei,
+ *            jeder 1s-Chunk wird sofort auf Disk geschrieben.
+ *   Fallback (Firefox/Safari): Chunks im Speicher, Download beim Stoppen.
+ *
+ * Tab-Warnung: tabHidden wird true, wenn der Tab inaktiv wird (canvas friert ein).
  */
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { Track } from 'livekit-client';
 import { getRoom } from './useLiveKit';
-import { useLiveKitStore } from '../model/stores/liveKitStore';
-import { apiPost } from '../services/apiClient';
+import { useParticipantVolumeStore } from '../model/stores/participantVolumeStore';
 
-interface ParticipantRecording {
-  recorder: MediaRecorder;
-  chunks: Blob[];
-  safeName: string;
-  hasVideo: boolean;
+function gridDims(n: number): { cols: number; rows: number } {
+  if (n <= 1) return { cols: 1, rows: 1 };
+  const cols = Math.ceil(Math.sqrt(n));
+  const rows = Math.ceil(n / cols);
+  return { cols, rows };
 }
+
+const hasFilePicker = typeof window !== 'undefined' && 'showSaveFilePicker' in window;
 
 export function useRecording() {
   const [isRecording, setIsRecording] = useState(false);
-  const recordingsRef = useRef<ParticipantRecording[]>([]);
-  const sessionIdRef  = useRef('');
-  const egressIdRef   = useRef<string | null>(null);
+  const [tabHidden, setTabHidden]     = useState(false);
 
+  const recorderRef    = useRef<MediaRecorder | null>(null);
+  const sessionIdRef   = useRef('');
+  const rafRef         = useRef<number>(0);
+  const audioCtxRef    = useRef<AudioContext | null>(null);
+  const videoElsRef    = useRef<HTMLVideoElement[]>([]);
+  const gainNodesRef   = useRef<Record<string, GainNode>>({});
+  const unsubVolumeRef = useRef<(() => void) | null>(null);
+
+  // File System Access API (wachsende Datei)
+  const writableRef    = useRef<FileSystemWritableFileStream | null>(null);
+  // Fallback: In-Memory-Chunks
+  const chunksRef      = useRef<Blob[]>([]);
+
+  // ── Tab-Sichtbarkeit ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = () => setTabHidden(document.hidden);
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, []);
+
+  // ── Aufnahme starten ────────────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
     const room = getRoom();
     if (!room || isRecording) return;
 
-    // Session-ID = ISO-Zeitstempel ohne Sonderzeichen → Dateiname-sicher
     const sessionId = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
     sessionIdRef.current = sessionId;
 
-    const recordings: ParticipantRecording[] = [];
+    // ── Datei öffnen (primär: File System Access API) ──────────────────────
+    if (hasFilePicker) {
+      try {
+        const handle = await (window as Window & typeof globalThis & {
+          showSaveFilePicker(opts?: object): Promise<FileSystemFileHandle>;
+        }).showSaveFilePicker({
+          suggestedName: `${sessionId}_meeting.webm`,
+          types: [{ description: 'WebM Video', accept: { 'video/webm': ['.webm'] } }],
+        });
+        writableRef.current = await handle.createWritable();
+      } catch {
+        // Nutzer hat den Dialog abgebrochen
+        return;
+      }
+    } else {
+      chunksRef.current = [];
+    }
+
     const allParticipants = [
       room.localParticipant,
       ...Array.from(room.remoteParticipants.values()),
     ];
 
+    // ── Offscreen-Videoelemente ─────────────────────────────────────────────
+    const videoEls: HTMLVideoElement[] = [];
     for (const participant of allParticipants) {
-      const tracks: MediaStreamTrack[] = [];
-      let hasVideo = false;
-
       const camPub = participant.getTrackPublication(Track.Source.Camera);
-      if (camPub?.track?.mediaStreamTrack) {
-        tracks.push(camPub.track.mediaStreamTrack);
-        hasVideo = true;
-      }
+      if (!camPub?.track?.mediaStreamTrack) continue;
+      const el = document.createElement('video');
+      el.autoplay  = true;
+      el.muted     = true;
+      el.srcObject = new MediaStream([camPub.track.mediaStreamTrack]);
+      await el.play().catch(() => {});
+      videoEls.push(el);
+    }
+    videoElsRef.current = videoEls;
 
+    // ── Offscreen-Canvas ────────────────────────────────────────────────────
+    const canvas = document.createElement('canvas');
+    canvas.width  = 1920;
+    canvas.height = 1080;
+    const ctx = canvas.getContext('2d')!;
+    const n = videoEls.length || 1;
+    const { cols, rows } = gridDims(n);
+    const tileW = canvas.width  / cols;
+    const tileH = canvas.height / rows;
+
+    const render = () => {
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      videoEls.forEach((el, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        if (el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          ctx.drawImage(el, col * tileW, row * tileH, tileW, tileH);
+        }
+      });
+      rafRef.current = requestAnimationFrame(render);
+    };
+    rafRef.current = requestAnimationFrame(render);
+
+    // ── AudioContext + GainNodes ────────────────────────────────────────────
+    const audioCtx    = new AudioContext();
+    audioCtxRef.current = audioCtx;
+    const destination = audioCtx.createMediaStreamDestination();
+    const gainNodes: Record<string, GainNode> = {};
+
+    for (const participant of allParticipants) {
       const micPub = participant.getTrackPublication(Track.Source.Microphone);
-      if (micPub?.track?.mediaStreamTrack) {
-        tracks.push(micPub.track.mediaStreamTrack);
-      }
-
-      if (tracks.length === 0) continue;
-
-      const stream   = new MediaStream(tracks);
-      const mimeType = hasVideo
-        ? (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-            ? 'video/webm;codecs=vp9,opus'
-            : 'video/webm')
-        : 'audio/webm;codecs=opus';
-
-      const recorder = new MediaRecorder(stream, { mimeType });
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-
-      const safeName = (participant.name || participant.identity).replace(/[^a-zA-Z0-9_-]/g, '_');
-      recordings.push({ recorder, chunks, safeName, hasVideo });
+      if (!micPub?.track?.mediaStreamTrack) continue;
+      const src  = audioCtx.createMediaStreamSource(new MediaStream([micPub.track.mediaStreamTrack]));
+      const gain = audioCtx.createGain();
+      gain.gain.value = useParticipantVolumeStore.getState().getVolume(participant.identity);
+      src.connect(gain);
+      gain.connect(destination);
+      gainNodes[participant.identity] = gain;
     }
+    gainNodesRef.current = gainNodes;
 
-    // ── Alle Recorder synchron starten (kein await!) ──────────────────────────
-    recordings.forEach((r) => r.recorder.start(1000)); // 1s-Chunks
-    recordingsRef.current = recordings;
-    setIsRecording(true);
-
-    // ── Server-seitige LiveKit-Aufnahme starten (optional, kann fehlen) ───────
-    const roomName = useLiveKitStore.getState().roomName;
-    if (roomName) {
-      try {
-        const { egressId } = await apiPost<{ egressId: string }>(
-          '/api/livekit/egress/start',
-          { room: roomName },
-        );
-        egressIdRef.current = egressId;
-      } catch {
-        egressIdRef.current = null; // Egress nicht verfügbar – lokal reicht
+    unsubVolumeRef.current = useParticipantVolumeStore.subscribe((state) => {
+      for (const [identity, gainNode] of Object.entries(gainNodesRef.current)) {
+        gainNode.gain.value = state.getVolume(identity);
       }
-    }
-  }, [isRecording]);
+    });
 
-  const stopRecording = useCallback(async () => {
-    const recordings = recordingsRef.current;
-    const sessionId  = sessionIdRef.current;
+    // ── MediaRecorder ───────────────────────────────────────────────────────
+    const videoTrack = canvas.captureStream(30).getVideoTracks()[0];
+    const combined   = new MediaStream([videoTrack, ...destination.stream.getAudioTracks()]);
+    const mimeType   = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus'
+      : 'video/webm';
 
-    recordings.forEach(({ recorder, chunks, safeName, hasVideo }) => {
+    const recorder = new MediaRecorder(combined, { mimeType });
+
+    if (writableRef.current) {
+      // Streaming: jeden Chunk sofort auf Disk schreiben
+      const writable = writableRef.current;
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) writable.write(e.data);
+      };
       recorder.onstop = () => {
-        const mimeType = hasVideo ? 'video/webm' : 'audio/webm';
-        const blob = new Blob(chunks, { type: mimeType });
+        writable.close();
+        writableRef.current = null;
+      };
+    } else {
+      // Fallback: In-Memory + Download
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
         a.href     = url;
-        a.download = `${sessionId}_${safeName}.webm`;
+        a.download = `${sessionIdRef.current}_meeting.webm`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       };
-      recorder.stop();
-    });
-
-    recordingsRef.current = [];
-    setIsRecording(false);
-
-    // ── Server-seitige Aufnahme stoppen ───────────────────────────────────────
-    if (egressIdRef.current) {
-      try {
-        await apiPost('/api/livekit/egress/stop', { egressId: egressIdRef.current });
-      } catch {
-        // Ignorieren – Aufnahme auf dem Server läuft bis zum Timeout
-      }
-      egressIdRef.current = null;
     }
+
+    recorder.start(1000);
+    recorderRef.current = recorder;
+    setIsRecording(true);
+  }, [isRecording]);
+
+  // ── Aufnahme stoppen ────────────────────────────────────────────────────────
+  const stopRecording = useCallback(() => {
+    const recorder = recorderRef.current;
+    if (!recorder) return;
+
+    recorder.stop(); // löst onstop aus (schließt Datei oder triggert Download)
+
+    cancelAnimationFrame(rafRef.current);
+    unsubVolumeRef.current?.();
+    unsubVolumeRef.current = null;
+    gainNodesRef.current   = {};
+    audioCtxRef.current?.close();
+    audioCtxRef.current = null;
+
+    videoElsRef.current.forEach((el) => { el.srcObject = null; });
+    videoElsRef.current = [];
+
+    recorderRef.current = null;
+    setIsRecording(false);
+    setTabHidden(false);
   }, []);
 
-  return { isRecording, startRecording, stopRecording };
+  return { isRecording, startRecording, stopRecording, tabHidden };
 }

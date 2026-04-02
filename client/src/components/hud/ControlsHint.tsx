@@ -25,42 +25,21 @@ const kbdStyle: React.CSSProperties = {
   color: 'rgba(255,255,255,0.6)',
 };
 
-const focusStyle = (follow: boolean): React.CSSProperties => ({
-  position: 'fixed',
-  bottom: 16,
-  left: '50%',
-  zIndex: 100,
-  transform: 'translateX(-50%)',
-  background: 'rgba(15,15,19,0.85)',
-  border: '1px solid rgba(125,211,252,0.3)',
-  borderRadius: 20,
-  padding: '6px 16px',
-  color: 'rgba(255,255,255,0.5)',
-  fontSize: 11,
-  backdropFilter: 'blur(8px)',
-  pointerEvents: 'none',
-  whiteSpace: 'nowrap',
-  opacity: follow ? 1 : 0.35,
-  transition: 'opacity 0.3s',
-});
-
 const ControlsHint = () => {
   const follow = useCameraStore((s) => s.follow);
 
   return (
-    <>
-      <div style={focusStyle(follow)}>
-        📷 Kamera folgt Charakter — drücke <strong>F</strong> zum Lösen
-      </div>
-      <div style={containerStyle}>
-        <span style={kbdStyle}>W A S D</span> — Bewegen<br />
-        <span style={kbdStyle}>Pfeiltasten</span> — Kamera<br />
-        <span style={kbdStyle}>Shift</span> — Sprinten<br />
-        <span style={kbdStyle}>F</span> — Kamera fokus<br />
-        <span style={kbdStyle}>Rechtsklick drag</span> — Kamera<br />
-        <span style={kbdStyle}>Mausrad</span> — Zoom
-      </div>
-    </>
+    <div style={containerStyle}>
+      <span style={kbdStyle}>W A S D</span> — Bewegen<br />
+      <span style={kbdStyle}>Pfeiltasten</span> — Kamera<br />
+      <span style={kbdStyle}>Shift</span> — Sprinten<br />
+      <span style={kbdStyle}>Rechtsklick drag</span> — Kamera<br />
+      <span style={kbdStyle}>Mausrad</span> — Zoom<br />
+      <span style={kbdStyle}>F</span> — Kamera{' '}
+      <span style={{ color: follow ? 'rgba(125,211,252,0.8)' : 'rgba(255,255,255,0.35)' }}>
+        {follow ? '● folgt' : '○ frei'}
+      </span>
+    </div>
   );
 };
 

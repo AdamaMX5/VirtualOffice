@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useCameraStore } from '../model/stores/cameraStore';
 import { MAP, WALK, SPRINT, SEND_INTERVAL } from '../model/constants';
@@ -12,7 +12,9 @@ interface GameLoopOptions {
   stageHeight: number;
 }
 
-export function useGameLoop({ sendMove, stageWidth, stageHeight }: GameLoopOptions) {
+export function useGameLoop({ sendMove, stageWidth, stageHeight }: GameLoopOptions): {
+  updateFromDrag: (wx: number, wy: number) => void;
+} {
   const keys = useKeyboard();
   const setPosition    = usePlayerStore((s) => s.setPosition);
   const setCurrentRoom = usePlayerStore((s) => s.setCurrentRoom);
@@ -131,5 +133,38 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight }: GameLoopOptio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sendMove]);
 
+  // ── Drag-to-Move: von außen aufrufbar (z.B. AvatarLayer) ──────────────────
+  const updateFromDrag = useCallback((wx: number, wy: number) => {
+    const newWx = Math.max(0, Math.min(MAP.w, wx));
+    const newWy = Math.max(0, Math.min(MAP.h, wy));
+    posRef.current = { wx: newWx, wy: newWy };
+    setPosition(newWx, newWy);
+
+    const newRoom = getRoomAtPos(newWx, newWy);
+    if (newRoom !== roomRef.current) {
+      roomRef.current = newRoom;
+      setCurrentRoom(newRoom);
+    }
+
+    if (followRef.current) {
+      const newOffset = {
+        x: stageW.current / 2 - newWx * 32 * scaleRef.current,
+        y: stageH.current / 2 - newWy * 32 * scaleRef.current,
+      };
+      offsetRef.current = newOffset;
+      setOffset(newOffset);
+    }
+
+    const now2 = performance.now();
+    const ddx  = Math.abs(newWx - lastSentRef.current.x);
+    const ddy  = Math.abs(newWy - lastSentRef.current.y);
+    if (now2 - lastSendRef.current >= SEND_INTERVAL && (ddx >= 0.01 || ddy >= 0.01)) {
+      sendMove(newWx, newWy);
+      lastSentRef.current = { x: newWx, y: newWy };
+      lastSendRef.current = now2;
+    }
+  }, [sendMove, setPosition, setCurrentRoom, setOffset]);
+
+  return { updateFromDrag };
 }
 

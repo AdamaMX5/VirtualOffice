@@ -38,7 +38,7 @@ const BuildingLayer = React.memo(({ x, y, scaleX, scaleY }: {
             width={80}
             text={room.label}
             fontSize={11}
-            fill="rgba(0,0,0,0.4)"
+            fill="rgba(255,255,255,0.35)"
             align="center"
           />
         </React.Fragment>
@@ -50,14 +50,14 @@ const BuildingLayer = React.memo(({ x, y, scaleX, scaleY }: {
           const len = Math.hypot(x2 - x1, y2 - y1);
           return (
             <React.Fragment key={key}>
-              <Line points={[x1, y1, x2, y2]} stroke="#8B6914" strokeWidth={3} dash={[5, 3]} />
+              <Line points={[x1, y1, x2, y2]} stroke="rgba(255,255,255,0.25)" strokeWidth={2} dash={[5, 3]} />
               <Arc
                 x={x1} y={y1}
                 innerRadius={0}
                 outerRadius={len}
                 angle={90}
                 rotation={y1 === y2 ? -90 : 0}
-                fill="rgba(139,105,20,0.1)"
+                fill="rgba(255,255,255,0.04)"
               />
             </React.Fragment>
           );
@@ -72,14 +72,14 @@ const BuildingLayer = React.memo(({ x, y, scaleX, scaleY }: {
                 ctx.lineTo(x2, y2);
                 ctx.strokeShape(shape);
               }}
-              stroke="rgba(74,55,40,0.3)"
-              strokeWidth={1.5}
+              stroke="rgba(255,255,255,0.1)"
+              strokeWidth={2}
               lineCap="round"
             />
           );
         }
         return (
-          <Line key={key} points={[x1, y1, x2, y2]} stroke="#4a3728" strokeWidth={3} lineCap="round" />
+          <Line key={key} points={[x1, y1, x2, y2]} stroke="#0d0d0d" strokeWidth={6} lineCap="round" />
         );
       })}
     </Layer>

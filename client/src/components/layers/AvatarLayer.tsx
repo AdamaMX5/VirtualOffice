@@ -1,19 +1,36 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { Layer } from 'react-konva';
 import type KonvaType from 'konva';
 import { usePlayerStore } from '../../model/stores/playerStore';
 import { usePresenceStore } from '../../model/stores/presenceStore';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
+import { useCameraStore } from '../../model/stores/cameraStore';
 import { videoRegistry } from '../../services/videoRegistry';
+import { P } from '../../model/constants';
 import SmileyAvatar from '../avatars/SmileyAvatar';
 
-const AvatarLayer = React.memo(({ x, y, scaleX, scaleY }: {
+const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag }: {
   x: number; y: number; scaleX: number; scaleY: number;
+  updateFromDrag: (wx: number, wy: number) => void;
 }) => {
   const { wx, wy, name } = usePlayerStore();
   const remoteUsers  = usePresenceStore((s) => s.remoteUsers);
   // trackVersion als Re-Render-Trigger wenn Video-Tracks sich ändern
   useLiveKitStore((s) => s.trackVersion);
+
+  // Konva-Pixel → Tile-Koordinaten → updateFromDrag
+  const handleDragMove = useCallback((e: KonvaType.KonvaEventObject<DragEvent>) => {
+    updateFromDrag(e.target.x() / P, e.target.y() / P);
+  }, [updateFromDrag]);
+
+  const handleDragStart = useCallback(() => {
+    useCameraStore.getState().setFollow(false);
+  }, []);
+
+  const handleDragEnd = useCallback((e: KonvaType.KonvaEventObject<DragEvent>) => {
+    updateFromDrag(e.target.x() / P, e.target.y() / P);
+    document.body.style.cursor = 'default';
+  }, [updateFromDrag]);
 
   const layerRef = useRef<KonvaType.Layer>(null);
 
@@ -58,6 +75,10 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY }: {
         isPlayer={true}
         animate={false}
         videoElement={videoRegistry.getActive(name)}
+        draggable
+        onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
+        onDragEnd={handleDragEnd}
       />
     </Layer>
   );
