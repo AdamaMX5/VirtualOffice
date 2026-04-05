@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useCameraStore } from '../model/stores/cameraStore';
-import { MAP, WALK, SPRINT, SEND_INTERVAL } from '../model/constants';
+import { MAP, WALK, SPRINT, SEND_INTERVAL, P } from '../model/constants';
 import { getRoomAtPos } from '../model/mapData';
 import { useKeyboard } from './useKeyboard';
 
@@ -10,9 +10,11 @@ interface GameLoopOptions {
   sendMove: (x: number, y: number) => void;
   stageWidth: number;
   stageHeight: number;
+  /** Wenn true, werden WASD und Pfeiltasten ignoriert (z.B. während Meeting-Ansicht) */
+  paused?: boolean;
 }
 
-export function useGameLoop({ sendMove, stageWidth, stageHeight }: GameLoopOptions): {
+export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameLoopOptions): {
   updateFromDrag: (wx: number, wy: number) => void;
 } {
   const keys = useKeyboard();
@@ -55,6 +57,17 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight }: GameLoopOptio
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [setFollow, setOffset]);
 
+  // Kamera beim ersten Mount auf Spieler-Startposition zentrieren
+  useEffect(() => {
+    const offset = {
+      x: stageW.current / 2 - posRef.current.wx * P * scaleRef.current,
+      y: stageH.current / 2 - posRef.current.wy * P * scaleRef.current,
+    };
+    offsetRef.current = offset;
+    setOffset(offset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Sync scale/offset/follow automatisch aus dem Store (verhindert Stale-Closure beim Zoom)
   useEffect(() => {
     return useCameraStore.subscribe((state) => {
@@ -73,7 +86,7 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight }: GameLoopOptio
       lastT = now;
 
       const k = keys.current;
-      if (!k) { rafId = requestAnimationFrame(loop); return; }
+      if (!k || paused) { rafId = requestAnimationFrame(loop); return; }
 
       const sprint = k.has('ShiftLeft') || k.has('ShiftRight');
       const spd = (sprint ? SPRINT : WALK) * dt;
