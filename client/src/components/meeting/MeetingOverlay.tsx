@@ -158,7 +158,7 @@ const MeetingTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled
 
   return (
     <div
-      style={{ position: 'relative', background: '#111', overflow: 'hidden' }}
+      style={{ position: 'relative', background: '#111', overflow: 'hidden', borderRadius: 10, aspectRatio: '16/9' }}
       onContextMenu={handleContextMenu}
     >
       <video
@@ -229,10 +229,21 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
   const speakerEnabled = useLiveKitStore((s) => s.speakerEnabled);
   const { isRecording, startRecording, stopRecording, tabHidden } = useRecording();
 
+  const [bgUrl, setBgUrl]   = useState<string | null>(null);
+  const bgInputRef          = useRef<HTMLInputElement>(null);
+
+  const handleBgUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (bgUrl) URL.revokeObjectURL(bgUrl);
+    setBgUrl(URL.createObjectURL(file));
+  }, [bgUrl]);
+
   const handleClose = useCallback(() => {
     if (isRecording) stopRecording();
+    if (bgUrl) URL.revokeObjectURL(bgUrl);
     onClose();
-  }, [isRecording, stopRecording, onClose]);
+  }, [isRecording, stopRecording, bgUrl, onClose]);
 
   const room = getRoom();
   if (!room) return null;
@@ -242,7 +253,7 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
     .filter((p): p is NonNullable<typeof p> => p != null);
 
   const total = 1 + remoteParticipants.length;
-  const { cols, rows } = gridDims(total);
+  const { cols } = gridDims(total);
 
   const btnBase: React.CSSProperties = {
     background: 'rgba(15,15,19,0.85)',
@@ -261,12 +272,24 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
       position: 'fixed',
       inset: 0,
       zIndex: 400,
-      background: '#0a0a0f',
+      background: bgUrl
+        ? `url(${bgUrl}) center / cover no-repeat`
+        : '#0a0a0f',
       display: 'grid',
       gridTemplateColumns: `repeat(${cols}, 1fr)`,
-      gridTemplateRows: `repeat(${rows}, 1fr)`,
-      gap: 0,
+      alignContent: 'center',
+      gap: '1.5%',
+      padding: '1.5%',
+      boxSizing: 'border-box',
     }}>
+      {/* Versteckter File-Input für Hintergrundbild */}
+      <input
+        ref={bgInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleBgUpload}
+      />
       {/* Eigene Kachel zuerst */}
       <MeetingTile participant={room.localParticipant} isLocal speakerEnabled={speakerEnabled} />
 
@@ -306,7 +329,7 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
       }}>
         {/* Aufnahme-Button */}
         <button
-          onClick={isRecording ? stopRecording : startRecording}
+          onClick={isRecording ? stopRecording : () => startRecording(bgUrl)}
           style={{
             ...btnBase,
             background: isRecording
@@ -320,6 +343,16 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
         >
           {isRecording ? '⏹ Aufnahme stoppen' : '⏺ Aufnahme starten'}
         </button>
+
+        {/* Hintergrundbild */}
+        <button onClick={() => bgInputRef.current?.click()} style={btnBase} title="Hintergrundbild hochladen">
+          {bgUrl ? '🖼 Hintergrund ändern' : '🖼 Hintergrund'}
+        </button>
+        {bgUrl && (
+          <button onClick={() => { URL.revokeObjectURL(bgUrl); setBgUrl(null); }} style={btnBase} title="Hintergrund entfernen">
+            ✕ Hintergrund
+          </button>
+        )}
 
         {/* Schließen-Button */}
         <button onClick={handleClose} style={btnBase}>

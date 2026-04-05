@@ -52,7 +52,7 @@ export function useRecording() {
   }, []);
 
   // ── Aufnahme starten ────────────────────────────────────────────────────────
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (bgUrl?: string | null) => {
     const room = getRoom();
     if (!room || isRecording) return;
 
@@ -103,17 +103,90 @@ export function useRecording() {
     const ctx = canvas.getContext('2d')!;
     const n = videoEls.length || 1;
     const { cols, rows } = gridDims(n);
-    const tileW = canvas.width  / cols;
-    const tileH = canvas.height / rows;
+
+    // Mirror MeetingOverlay: 1.5% padding + 1.5% gaps
+    const PAD  = Math.round(canvas.width  * 0.015);
+    const GAP  = Math.round(canvas.width  * 0.015);
+    const GAP_V = Math.round(canvas.height * 0.015);
+    const gridW = canvas.width  - 2 * PAD - (cols - 1) * GAP;
+    const gridH = canvas.height - 2 * PAD - (rows - 1) * GAP_V;
+    const tileW = Math.floor(gridW / cols);
+    const tileH = Math.floor(gridH / rows);
+
+    // Load background image once
+    let bgImg: HTMLImageElement | null = null;
+    if (bgUrl) {
+      bgImg = new Image();
+      await new Promise<void>((resolve) => {
+        bgImg!.onload = () => resolve();
+        bgImg!.onerror = () => { bgImg = null; resolve(); };
+        bgImg!.src = bgUrl;
+      });
+    }
 
     const render = () => {
-      ctx.fillStyle = '#0a0a0f';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Background
+      if (bgImg) {
+        // cover-scale: fill canvas, crop centre
+        const imgAspect = bgImg.width / bgImg.height;
+        const canAspect = canvas.width / canvas.height;
+        let sx = 0, sy = 0, sw = bgImg.width, sh = bgImg.height;
+        if (imgAspect > canAspect) {
+          sw = bgImg.height * canAspect;
+          sx = (bgImg.width - sw) / 2;
+        } else {
+          sh = bgImg.width / canAspect;
+          sy = (bgImg.height - sh) / 2;
+        }
+        ctx.drawImage(bgImg, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.fillStyle = '#0a0a0f';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
       videoEls.forEach((el, i) => {
         const col = i % cols;
         const row = Math.floor(i / cols);
+        const x = PAD + col * (tileW + GAP);
+        const y = PAD + row * (tileH + GAP_V);
+
         if (el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          ctx.drawImage(el, col * tileW, row * tileH, tileW, tileH);
+          // objectFit: cover — crop video to fill 16:9 tile
+          const vw = el.videoWidth  || tileW;
+          const vh = el.videoHeight || tileH;
+          const tileAspect = tileW / tileH;
+          const vidAspect  = vw / vh;
+          let sx = 0, sy = 0, sw = vw, sh = vh;
+          if (vidAspect > tileAspect) {
+            sw = vh * tileAspect;
+            sx = (vw - sw) / 2;
+          } else {
+            sh = vw / tileAspect;
+            sy = (vh - sh) / 2;
+          }
+          ctx.save();
+          // rounded rect clip (matches borderRadius: 10 → ~10/1080 of height)
+          const r = Math.round(canvas.height * 10 / 1080);
+          ctx.beginPath();
+          ctx.roundRect(x, y, tileW, tileH, r);
+          ctx.clip();
+          ctx.drawImage(el, sx, sy, sw, sh, x, y, tileW, tileH);
+          ctx.restore();
+        } else {
+          // placeholder when no video
+          ctx.save();
+          const r = Math.round(canvas.height * 10 / 1080);
+          ctx.beginPath();
+          ctx.roundRect(x, y, tileW, tileH, r);
+          ctx.clip();
+          ctx.fillStyle = '#111';
+          ctx.fillRect(x, y, tileW, tileH);
+          ctx.fillStyle = 'rgba(255,255,255,0.2)';
+          ctx.font = `${tileH * 0.4}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('👤', x + tileW / 2, y + tileH / 2);
+          ctx.restore();
         }
       });
       rafRef.current = requestAnimationFrame(render);
