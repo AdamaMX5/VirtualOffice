@@ -115,7 +115,7 @@ const MeetingTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled
         (camPub.track as { attach(el: HTMLVideoElement): void }).attach(videoRef.current);
         setTimeout(() => videoRef.current?.play().catch(() => {}), 50);
       }
-      if (micPub?.track && audioRef.current) {
+      if (micPub?.track && audioRef.current && !isLocal) {
         (micPub.track as { attach(el: HTMLAudioElement): void }).attach(audioRef.current);
       }
       forceUpdate();

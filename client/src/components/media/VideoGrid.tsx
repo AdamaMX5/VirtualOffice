@@ -1,84 +1,10 @@
 import React, { useEffect, useRef, useReducer, useState } from 'react';
-import {
-  Participant,
-  RemoteParticipant,
-  ParticipantEvent,
-  Track,
-} from 'livekit-client';
+import { Participant, RemoteParticipant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { getRoom } from '../../hooks/useLiveKit';
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const TILE_W = 160;
-const TILE_H = 120;
-
-const gridWrapStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 16,
-  right: 16,
-  zIndex: 200,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 6,
-  maxHeight: 'calc(100vh - 32px)',
-  overflowY: 'auto',
-};
-
-const collapseBtn: React.CSSProperties = {
-  alignSelf: 'flex-end',
-  background: 'rgba(15,15,19,0.85)',
-  border: '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 6,
-  color: 'rgba(255,255,255,0.8)',
-  cursor: 'pointer',
-  fontSize: 12,
-  padding: '3px 8px',
-};
-
-const tileStyle: React.CSSProperties = {
-  position: 'relative',
-  width: TILE_W,
-  height: TILE_H,
-  borderRadius: 8,
-  overflow: 'hidden',
-  background: '#1a1a2e',
-  border: '1px solid rgba(255,255,255,0.1)',
-  flexShrink: 0,
-};
-
-const videoStyle: React.CSSProperties = {
-  width: '100%',
-  height: '100%',
-  objectFit: 'cover',
-};
-
-const nameLabelStyle: React.CSSProperties = {
-  position: 'absolute',
-  bottom: 0,
-  left: 0,
-  right: 0,
-  background: 'rgba(0,0,0,0.55)',
-  color: '#fff',
-  fontSize: 11,
-  padding: '2px 6px',
-  textAlign: 'center',
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-};
-
-const placeholderStyle: React.CSSProperties = {
-  width: '100%',
-  height: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 4,
-  color: 'rgba(255,255,255,0.5)',
-  fontSize: 11,
-};
+const TILE_W = 128;
+const TILE_H = 72; // 16:9
 
 // ── ParticipantTile ───────────────────────────────────────────────────────────
 
@@ -86,9 +12,10 @@ interface TileProps {
   participant: Participant;
   isLocal: boolean;
   speakerEnabled: boolean;
+  reloadKey: number;
 }
 
-const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled }) => {
+const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled, reloadKey }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
@@ -97,74 +24,84 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
     const reattach = () => {
       const camPub = participant.getTrackPublication(Track.Source.Camera);
       const micPub = participant.getTrackPublication(Track.Source.Microphone);
-
       if (camPub?.track && videoRef.current) {
         (camPub.track as { attach(el: HTMLVideoElement): void }).attach(videoRef.current);
+        const tryPlay = () => videoRef.current?.play().catch(() => {});
+        tryPlay();
+        videoRef.current.addEventListener('canplay', tryPlay, { once: true });
+        setTimeout(tryPlay, 300);
       }
-      if (micPub?.track && audioRef.current) {
+      if (micPub?.track && audioRef.current && !isLocal) {
         (micPub.track as { attach(el: HTMLAudioElement): void }).attach(audioRef.current);
       }
       forceUpdate();
     };
-
     const detach = () => {
       const camPub = participant.getTrackPublication(Track.Source.Camera);
       const micPub = participant.getTrackPublication(Track.Source.Microphone);
-      if (camPub?.track && videoRef.current) {
+      if (camPub?.track && videoRef.current)
         (camPub.track as { detach(el: HTMLVideoElement): void }).detach(videoRef.current);
-      }
-      if (micPub?.track && audioRef.current) {
+      if (micPub?.track && audioRef.current)
         (micPub.track as { detach(el: HTMLAudioElement): void }).detach(audioRef.current);
-      }
     };
 
     reattach();
-
     const events = [
-      ParticipantEvent.TrackSubscribed,
-      ParticipantEvent.TrackUnsubscribed,
-      ParticipantEvent.TrackMuted,
-      ParticipantEvent.TrackUnmuted,
-      ParticipantEvent.TrackPublished,
-      ParticipantEvent.TrackUnpublished,
+      ParticipantEvent.TrackSubscribed, ParticipantEvent.TrackUnsubscribed,
+      ParticipantEvent.TrackMuted,      ParticipantEvent.TrackUnmuted,
+      ParticipantEvent.TrackPublished,  ParticipantEvent.TrackUnpublished,
     ];
     events.forEach((ev) => participant.on(ev as never, reattach as never));
-
     return () => {
       events.forEach((ev) => participant.off(ev as never, reattach as never));
       detach();
     };
-  }, [participant]);
+  }, [participant, reloadKey]);
 
-  // Sync audio mute state
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.muted = isLocal || !speakerEnabled;
-    }
+    if (audioRef.current) audioRef.current.muted = isLocal || !speakerEnabled;
   }, [speakerEnabled, isLocal]);
 
-  const hasCam = !!participant.getTrackPublication(Track.Source.Camera)?.track;
+  const hasCam      = !!participant.getTrackPublication(Track.Source.Camera)?.track;
   const displayName = participant.name || participant.identity || '?';
 
   return (
-    <div style={tileStyle}>
-      {/* Video immer im DOM – damit videoRef beim attach() verfügbar ist */}
+    <div style={{
+      position: 'relative',
+      width: TILE_W,
+      height: TILE_H,
+      borderRadius: 6,
+      overflow: 'hidden',
+      background: '#1a1a2e',
+      border: '1px solid rgba(255,255,255,0.1)',
+      flexShrink: 0,
+    }}>
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted={isLocal}
-        style={{ ...videoStyle, display: hasCam ? 'block' : 'none' }}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: hasCam ? 'block' : 'none' }}
       />
       {!hasCam && (
-        <div style={placeholderStyle}>
-          <span style={{ fontSize: 28 }}>👤</span>
-          <span>{displayName}</span>
+        <div style={{
+          width: '100%', height: '100%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 22, color: 'rgba(255,255,255,0.3)',
+        }}>
+          👤
         </div>
       )}
-      <audio ref={audioRef} autoPlay />
-      <div style={nameLabelStyle}>
-        {isLocal ? '📹 Du' : displayName}
+      <audio ref={audioRef} autoPlay muted={isLocal || !speakerEnabled} />
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        background: 'rgba(0,0,0,0.55)',
+        color: '#fff', fontSize: 10,
+        padding: '2px 5px',
+        textAlign: 'center',
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>
+        {isLocal ? 'Du' : displayName}
       </div>
     </div>
   );
@@ -173,13 +110,13 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
 // ── VideoGrid ─────────────────────────────────────────────────────────────────
 
 const VideoGrid: React.FC = () => {
-  const status        = useLiveKitStore((s) => s.status);
+  const status         = useLiveKitStore((s) => s.status);
   const participantIds = useLiveKitStore((s) => s.participantIds);
   const speakerEnabled = useLiveKitStore((s) => s.speakerEnabled);
+  const trackVersion   = useLiveKitStore((s) => s.trackVersion);
   const [collapsed, setCollapsed] = useState(false);
 
   if (status !== 'connected') return null;
-
   const room = getRoom();
   if (!room) return null;
 
@@ -188,32 +125,47 @@ const VideoGrid: React.FC = () => {
     .filter((p): p is RemoteParticipant => p !== undefined);
 
   return (
-    <div style={gridWrapStyle}>
-      <button style={collapseBtn} onClick={() => setCollapsed((v) => !v)}>
-        {collapsed ? '📷 Anzeigen' : '▶ Verbergen'}
-      </button>
-
+    <div style={{
+      position: 'fixed',
+      top: 10,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 200,
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 6,
+      maxWidth: 'calc(100vw - 220px)',
+      overflowX: 'auto',
+    }}>
       {!collapsed && (
         <>
-          {/* Local self-view */}
-          <ParticipantTile
-            key="local"
-            participant={room.localParticipant}
-            isLocal
-            speakerEnabled={speakerEnabled}
-          />
-
-          {/* Remote participants */}
+          <ParticipantTile participant={room.localParticipant} isLocal speakerEnabled={speakerEnabled} reloadKey={trackVersion} />
           {remoteParticipants.map((p) => (
-            <ParticipantTile
-              key={p.identity}
-              participant={p}
-              isLocal={false}
-              speakerEnabled={speakerEnabled}
-            />
+            <ParticipantTile key={p.identity} participant={p} isLocal={false} speakerEnabled={speakerEnabled} reloadKey={trackVersion} />
           ))}
         </>
       )}
+
+      {/* Collapse-Button */}
+      <button
+        onClick={() => setCollapsed((v) => !v)}
+        style={{
+          alignSelf: 'center',
+          background: 'rgba(15,15,19,0.85)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 6,
+          color: 'rgba(255,255,255,0.6)',
+          cursor: 'pointer',
+          fontSize: 11,
+          padding: '4px 8px',
+          flexShrink: 0,
+          backdropFilter: 'blur(8px)',
+        }}
+        title={collapsed ? 'Kameras anzeigen' : 'Kameras verbergen'}
+      >
+        {collapsed ? '▶ Kameras' : '✕'}
+      </button>
     </div>
   );
 };
