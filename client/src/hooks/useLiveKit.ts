@@ -10,25 +10,30 @@ import { useAuthStore } from '../model/stores/authStore';
 import { apiPost } from '../services/apiClient';
 
 // ── Module-level Room singleton ───────────────────────────────────────────────
-// Stored outside React so VideoGrid can access it without prop drilling.
 
 let _room: Room | null = null;
+let _connecting               = false;   // verhindert parallele connect()-Aufrufe
+let _lastConnectAttempt       = 0;
+const CONNECT_COOLDOWN_MS     = 3000;    // mind. 3s zwischen zwei Versuchen
+let _failedConnect            = false;   // verhindert Reset nach fehlgeschlagenem connect()
 
-/** Access the current LiveKit Room instance (may be null if disconnected). */
 export function getRoom(): Room | null {
   return _room;
 }
 
-// When true, forces ICE relay (TURN only) – needed behind Cloudflare where
-// most WebRTC UDP ports are blocked.  Set VITE_LIVEKIT_FORCE_TURN=true in .env
 const FORCE_TURN = import.meta.env.VITE_LIVEKIT_FORCE_TURN === 'true';
+
+// Shorthand – alle Store-Aufrufe über getState(), damit keine React-Subscription
+// auf den ganzen Store entsteht und Callbacks stabil bleiben.
+const S = () => useLiveKitStore.getState();
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useLiveKit() {
-  const store = useLiveKitStore();
-  const { name: playerName } = usePlayerStore();
-  const { email, authStatus } = useAuthStore();
+  // Nur die Werte lesen, die wirklich für stabile Callback-Deps gebraucht werden
+  const playerName = usePlayerStore((s) => s.name);
+  const email      = useAuthStore((s) => s.email);
+  const authStatus = useAuthStore((s) => s.authStatus);
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -40,82 +45,97 @@ export function useLiveKit() {
 
   const syncParticipants = useCallback(() => {
     if (!_room) return;
-    const ids = Array.from(_room.remoteParticipants.keys());
-    store.setParticipantIds(ids);
-  }, [store]);
+    S().setParticipantIds(Array.from(_room.remoteParticipants.keys()));
+  }, []);
 
   // ── connect ────────────────────────────────────────────────────────────────
 
   const connect = useCallback(async (roomName = 'main') => {
-    if (_room) return; // already connected
+    if (_room || _connecting) return;
+    const now = Date.now();
+    if (now - _lastConnectAttempt < CONNECT_COOLDOWN_MS) return;
+    _connecting         = true;
+    _lastConnectAttempt = now;
 
-    store.setStatus('connecting');
-    store.setError(null);
+    S().setStatus('connecting');
+    S().setError(null);
 
+    let room: Room | null = null;
     try {
       const identity = buildIdentity();
-
       const { token, url } = await apiPost<{ token: string; url: string }>(
         '/api/livekit/token',
-        { room: roomName, identity, name: playerName || identity }
+        { room: roomName, identity, name: playerName || identity },
       );
 
-      const room = new Room({ adaptiveStream: true, dynacast: true });
+      room = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+        // Internes Reconnect deaktivieren – bei 401 ist ein neuer Token nötig,
+        // blindes Retry macht es nur schlimmer.
+        reconnectPolicy: { nextRetryDelayInMs: () => null },
+      });
       _room = room;
 
       const connectOptions: RoomConnectOptions = FORCE_TURN
         ? { rtcConfig: { iceTransportPolicy: 'relay' } }
         : {};
 
-      // ── room events ────────────────────────────────────────────────────────
       room.on(RoomEvent.ParticipantConnected,    syncParticipants);
       room.on(RoomEvent.ParticipantDisconnected, syncParticipants);
-      room.on(RoomEvent.TrackSubscribed,         () => { syncParticipants(); store.bumpTrackVersion(); });
-      room.on(RoomEvent.TrackUnsubscribed,       () => { syncParticipants(); store.bumpTrackVersion(); });
-      room.on(RoomEvent.LocalTrackPublished,     () => store.bumpTrackVersion());
-      room.on(RoomEvent.LocalTrackUnpublished,   () => store.bumpTrackVersion());
+      room.on(RoomEvent.TrackSubscribed,         () => { syncParticipants(); S().bumpTrackVersion(); });
+      room.on(RoomEvent.TrackUnsubscribed,       () => { syncParticipants(); S().bumpTrackVersion(); });
+      room.on(RoomEvent.LocalTrackPublished,     () => S().bumpTrackVersion());
+      room.on(RoomEvent.LocalTrackUnpublished,   () => S().bumpTrackVersion());
 
       room.on(RoomEvent.Disconnected, () => {
         _room = null;
-        store.reset();
+        if (!_failedConnect) {
+          S().reset(); // nur bei echtem Disconnect zurücksetzen, nicht nach connect()-Fehler
+        }
+        _failedConnect = false;
       });
 
       await room.connect(url, token, connectOptions);
 
-      store.setStatus('connected');
-      store.setRoomName(roomName);
+      S().setStatus('connected');
+      S().setRoomName(roomName);
       syncParticipants();
 
       await room.localParticipant.setMicrophoneEnabled(true);
       await room.localParticipant.setCameraEnabled(true);
-      store.setMicEnabled(true);
-      store.setCamEnabled(true);
+      S().setMicEnabled(true);
+      S().setCamEnabled(true);
+      _connecting = false;
     } catch (err) {
-      _room = null;
-      store.setStatus('error');
-      store.setError(String(err));
+      _failedConnect = true;                        // Disconnected-Event soll nicht reset() auslösen
+      await room?.disconnect().catch(() => {}); // interne LiveKit-Retries stoppen
+      _room       = null;
+      _connecting = false;
+      S().setStatus('error');
+      S().setError(String(err));
     }
-  }, [buildIdentity, playerName, store, syncParticipants]);
+  }, [buildIdentity, playerName, syncParticipants]);
 
   // ── disconnect ─────────────────────────────────────────────────────────────
 
   const disconnect = useCallback(async () => {
     const room = _room;
     _room = null;
-    store.reset();
+    S().reset();
     await room?.disconnect();
-  }, [store]);
+  }, []);
 
   // ── switchRoom ─────────────────────────────────────────────────────────────
 
   const switchRoom = useCallback(async (roomName: string) => {
-    if (useLiveKitStore.getState().roomName === roomName) return;
+    if (S().roomName === roomName) return;
     const room = _room;
     _room = null;
-    store.reset();
+    S().reset();
     await room?.disconnect();
     await connect(roomName);
-  }, [connect, store]);
+  }, [connect]);
 
   // ── media toggles ──────────────────────────────────────────────────────────
 
@@ -124,28 +144,26 @@ export function useLiveKit() {
     if (!local) return;
     const enabled = !local.isMicrophoneEnabled;
     await local.setMicrophoneEnabled(enabled);
-    store.setMicEnabled(enabled);
-  }, [store]);
+    S().setMicEnabled(enabled);
+  }, []);
 
   const toggleCam = useCallback(async () => {
     const local = _room?.localParticipant;
     if (!local) return;
     const enabled = !local.isCameraEnabled;
     await local.setCameraEnabled(enabled);
-    store.setCamEnabled(enabled);
-  }, [store]);
+    S().setCamEnabled(enabled);
+  }, []);
 
   const toggleSpeaker = useCallback(() => {
-    const enabled = !useLiveKitStore.getState().speakerEnabled;
-    store.setSpeakerEnabled(enabled);
+    const enabled = !S().speakerEnabled;
+    S().setSpeakerEnabled(enabled);
     _room?.remoteParticipants.forEach((p) => {
       p.audioTrackPublications.forEach((pub) => {
-        if (pub.track) {
-          pub.track.mediaStreamTrack.enabled = enabled;
-        }
+        if (pub.track) pub.track.mediaStreamTrack.enabled = enabled;
       });
     });
-  }, [store]);
+  }, []);
 
   return { connect, disconnect, switchRoom, toggleMic, toggleCam, toggleSpeaker };
 }
