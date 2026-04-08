@@ -61,12 +61,14 @@ export function useLiveKit() {
     S().setError(null);
 
     let room: Room | null = null;
+    let attemptedUrl = '(Token-Abruf noch nicht abgeschlossen)';
     try {
       const identity = buildIdentity();
       const { token, url } = await apiPost<{ token: string; url: string }>(
         '/api/livekit/token',
         { room: roomName, identity, name: playerName || identity },
       );
+      attemptedUrl = url;
 
       room = new Room({
         adaptiveStream: true,
@@ -108,12 +110,14 @@ export function useLiveKit() {
       S().setCamEnabled(true);
       _connecting = false;
     } catch (err) {
-      _failedConnect = true;                        // Disconnected-Event soll nicht reset() auslösen
-      await room?.disconnect().catch(() => {}); // interne LiveKit-Retries stoppen
+      _failedConnect = true;
+      await room?.disconnect().catch(() => {});
       _room       = null;
       _connecting = false;
       S().setStatus('error');
-      S().setError(String(err));
+      const errMsg   = err instanceof Error ? err.message : String(err);
+      const errStack = err instanceof Error ? (err.stack ?? null) : null;
+      S().setError(errMsg, attemptedUrl, errStack);
     }
   }, [buildIdentity, playerName, syncParticipants]);
 

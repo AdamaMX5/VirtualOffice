@@ -9,6 +9,7 @@ import VirtualJoystick from './hud/VirtualJoystick';
 import VideoManager from './media/VideoManager';
 import VideoGrid from './media/VideoGrid';
 import MediaControls from './media/MediaControls';
+import ConnectionErrorModal from './media/ConnectionErrorModal';
 import MeetingOverlay from './meeting/MeetingOverlay';
 import { usePresence } from '../hooks/usePresence';
 import { useGameLoop } from '../hooks/useGameLoop';
@@ -201,6 +202,7 @@ const OfficeCanvas = () => {
       <VideoGrid />
       <MediaControls />
       {showMeeting && <MeetingOverlay onClose={() => setShowMeeting(false)} />}
+      <ConnectionErrorModal />
       <VirtualJoystick />
     </div>
   );

@@ -13,6 +13,8 @@ interface LiveKitState {
   /** Increments when tracks change within existing participants */
   trackVersion: number;
   error: string | null;
+  errorUrl: string | null;
+  errorStack: string | null;
   // Actions
   setStatus: (status: LiveKitStatus) => void;
   setRoomName: (name: string | null) => void;
@@ -21,7 +23,7 @@ interface LiveKitState {
   setSpeakerEnabled: (v: boolean) => void;
   setParticipantIds: (ids: string[]) => void;
   bumpTrackVersion: () => void;
-  setError: (error: string | null) => void;
+  setError: (error: string | null, url?: string | null, stack?: string | null) => void;
   reset: () => void;
 }
 
@@ -34,6 +36,8 @@ export const useLiveKitStore = create<LiveKitState>((set) => ({
   participantIds: [],
   trackVersion: 0,
   error: null,
+  errorUrl: null,
+  errorStack: null,
 
   setStatus: (status) => set({ status }),
   setRoomName: (roomName) => set({ roomName }),
@@ -42,7 +46,7 @@ export const useLiveKitStore = create<LiveKitState>((set) => ({
   setSpeakerEnabled: (speakerEnabled) => set({ speakerEnabled }),
   setParticipantIds: (participantIds) => set({ participantIds }),
   bumpTrackVersion: () => set((s) => ({ trackVersion: s.trackVersion + 1 })),
-  setError: (error) => set({ error }),
+  setError: (error, url = null, stack = null) => set({ error, errorUrl: url, errorStack: stack }),
   reset: () => set({
     status: 'idle',
     roomName: null,
@@ -51,5 +55,7 @@ export const useLiveKitStore = create<LiveKitState>((set) => ({
     participantIds: [],
     trackVersion: 0,
     error: null,
+    errorUrl: null,
+    errorStack: null,
   }),
 }));
