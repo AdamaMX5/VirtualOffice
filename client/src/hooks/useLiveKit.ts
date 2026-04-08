@@ -50,7 +50,7 @@ export function useLiveKit() {
 
   // ── connect ────────────────────────────────────────────────────────────────
 
-  const connect = useCallback(async (roomName = 'main') => {
+  const connect = useCallback(async (roomName = 'main', forceTurn = false) => {
     if (_room || _connecting) return;
     const now = Date.now();
     if (now - _lastConnectAttempt < CONNECT_COOLDOWN_MS) return;
@@ -77,7 +77,7 @@ export function useLiveKit() {
       });
       _room = room;
 
-      const connectOptions: RoomConnectOptions = FORCE_TURN
+      const connectOptions: RoomConnectOptions = (FORCE_TURN || forceTurn)
         ? { rtcConfig: { iceTransportPolicy: 'relay' } }
         : {};
 

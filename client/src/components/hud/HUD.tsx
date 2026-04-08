@@ -5,25 +5,33 @@ import { useCameraStore } from '../../model/stores/cameraStore';
 import { useAuthStore } from '../../model/stores/authStore';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 
+const isTouchDevice =
+  typeof window !== 'undefined' &&
+  ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
 const hudStyle: React.CSSProperties = {
   position: 'fixed',
-  top: 16,
-  left: 16,
+  top: 'max(16px, env(safe-area-inset-top, 0px))',
+  left: 'max(16px, env(safe-area-inset-left, 0px))',
   zIndex: 100,
   display: 'flex',
   flexDirection: 'column',
-  gap: 8,
+  gap: 6,
   pointerEvents: 'none',
+  maxWidth: isTouchDevice ? 160 : 220,
 };
 
 const badgeStyle: React.CSSProperties = {
   background: 'rgba(15,15,19,0.85)',
   border: '1px solid rgba(255,255,255,0.1)',
   borderRadius: 8,
-  padding: '6px 12px',
+  padding: isTouchDevice ? '4px 8px' : '6px 12px',
   color: 'rgba(255,255,255,0.7)',
-  fontSize: 12,
+  fontSize: isTouchDevice ? 11 : 12,
   backdropFilter: 'blur(8px)',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
 };
 
 const spanStyle: React.CSSProperties = { color: '#7dd3fc', fontWeight: 600 };
@@ -89,12 +97,16 @@ const HUD = ({ onOpenMeeting }: HUDProps) => {
       <div style={badgeStyle}>
         <span style={{ color: wsStatusColor(wsStatus) }}>{wsStatusLabel(wsStatus)}</span>
       </div>
-      <div style={badgeStyle}>
-        Position: <span style={spanStyle}>{wx.toFixed(1)}m, {wy.toFixed(1)}m</span>
-      </div>
-      <div style={badgeStyle}>
-        Zoom: <span style={spanStyle}>{Math.round(scale * 100)}%</span>
-      </div>
+      {!isTouchDevice && (
+        <div style={badgeStyle}>
+          Position: <span style={spanStyle}>{wx.toFixed(1)}m, {wy.toFixed(1)}m</span>
+        </div>
+      )}
+      {!isTouchDevice && (
+        <div style={badgeStyle}>
+          Zoom: <span style={spanStyle}>{Math.round(scale * 100)}%</span>
+        </div>
+      )}
       {inMeeting && !meetingReady && (
         <div style={badgeStyle}>
           <span style={{ color: '#fbbf24' }}>⏳ Meetingraum wird verbunden...</span>

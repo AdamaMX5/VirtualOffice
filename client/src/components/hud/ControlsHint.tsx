@@ -1,6 +1,10 @@
 import React from 'react';
 import { useCameraStore } from '../../model/stores/cameraStore';
 
+const isTouchDevice =
+  typeof window !== 'undefined' &&
+  ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
 const containerStyle: React.CSSProperties = {
   position: 'fixed',
   bottom: 16,
@@ -27,6 +31,8 @@ const kbdStyle: React.CSSProperties = {
 
 const ControlsHint = () => {
   const follow = useCameraStore((s) => s.follow);
+
+  if (isTouchDevice) return null;
 
   return (
     <div style={containerStyle}>

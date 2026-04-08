@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback } from 'react';
+import { useCameraStore } from '../../model/stores/cameraStore';
 
 const OUTER_R = 50; // radius of outer ring
 const INNER_R = 22; // radius of knob
@@ -57,6 +58,8 @@ const VirtualJoystick: React.FC = () => {
     tidRef.current = t.identifier;
     const rect = ringRef.current!.getBoundingClientRect();
     centerRef.current = { x: rect.left + OUTER_R, y: rect.top + OUTER_R };
+    // Kamera-Folgemodus aktivieren, sobald Joystick genutzt wird
+    useCameraStore.getState().setFollow(true);
   }, []);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
@@ -78,14 +81,15 @@ const VirtualJoystick: React.FC = () => {
   return (
     <div
       ref={ringRef}
+      data-joystick="true"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
       style={{
         position: 'fixed',
-        bottom: 28,
-        left: 28,
+        bottom: 'max(28px, env(safe-area-inset-bottom, 0px))',
+        right: 28,
         width:  OUTER_R * 2,
         height: OUTER_R * 2,
         borderRadius: '50%',

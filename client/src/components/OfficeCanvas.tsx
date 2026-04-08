@@ -68,6 +68,8 @@ const OfficeCanvas = () => {
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 1) {
         const t = e.touches[0];
+        // Skip if touch started on the joystick
+        if ((e.target as HTMLElement).closest?.('[data-joystick]')) return;
         // Skip if touch is near the local avatar (let Konva's draggable handle it)
         const cam = useCameraStore.getState();
         const player = usePlayerStore.getState();

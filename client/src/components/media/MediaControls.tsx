@@ -5,22 +5,28 @@ import { reloadAllVideos } from '../../services/videoRegistry';
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
+const isTouchDevice =
+  typeof window !== 'undefined' &&
+  ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
 const wrapStyle: React.CSSProperties = {
   position: 'fixed',
-  bottom: 24,
-  left: '50%',
-  transform: 'translateX(-50%)',
+  bottom: 'max(16px, env(safe-area-inset-bottom, 0px))',
+  left: isTouchDevice ? 'max(16px, env(safe-area-inset-left, 0px))' : '50%',
+  transform: isTouchDevice ? 'none' : 'translateX(-50%)',
   zIndex: 200,
   display: 'flex',
   alignItems: 'center',
-  gap: 8,
+  flexWrap: 'wrap',
+  gap: 6,
   background: 'rgba(15,15,19,0.88)',
   border: '1px solid rgba(255,255,255,0.12)',
   borderRadius: 14,
-  padding: '8px 14px',
+  padding: isTouchDevice ? '6px 10px' : '8px 14px',
   backdropFilter: 'blur(10px)',
   boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
   pointerEvents: 'all',
+  maxWidth: isTouchDevice ? 'calc(100vw - 140px)' : undefined, // Platz für Joystick rechts
 };
 
 const btnBase: React.CSSProperties = {
@@ -97,21 +103,23 @@ const MediaControls: React.FC = () => {
     return (
       <div style={wrapStyle}>
         <span style={{ fontSize: 16 }}>🎙</span>
-        <select
-          value={selectedRoom}
-          onChange={(e) => setSelectedRoom(e.target.value)}
-          style={{
-            background: 'rgba(255,255,255,0.08)',
-            border: '1px solid rgba(255,255,255,0.15)',
-            borderRadius: 6,
-            color: '#fff',
-            fontSize: 12,
-            padding: '4px 6px',
-            cursor: 'pointer',
-          }}
-        >
-          {ROOMS.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
+        {!isTouchDevice && (
+          <select
+            value={selectedRoom}
+            onChange={(e) => setSelectedRoom(e.target.value)}
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 6,
+              color: '#fff',
+              fontSize: 12,
+              padding: '4px 6px',
+              cursor: 'pointer',
+            }}
+          >
+            {ROOMS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        )}
 
         <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
           <input
@@ -122,7 +130,7 @@ const MediaControls: React.FC = () => {
           <span>TURN</span>
         </label>
 
-        <button style={joinBtn} onClick={() => connect(selectedRoom)}>
+        <button style={joinBtn} onClick={() => connect(selectedRoom, forceTurn)}>
           🎤 Beitreten
         </button>
 
