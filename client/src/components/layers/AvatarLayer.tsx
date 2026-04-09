@@ -5,7 +5,6 @@ import { usePlayerStore } from '../../model/stores/playerStore';
 import { usePresenceStore } from '../../model/stores/presenceStore';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useCameraStore } from '../../model/stores/cameraStore';
-import { videoRegistry } from '../../services/videoRegistry';
 import { P } from '../../model/constants';
 import SmileyAvatar from '../avatars/SmileyAvatar';
 
@@ -50,9 +49,8 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag }: {
     <Layer ref={layerRef} x={x} y={y} scaleX={scaleX} scaleY={scaleY}>
       {/* Remote-User (mit Tween-Animation) */}
       {Object.values(remoteUsers).map((user) => {
-        const isBot   = user.user_id.startsWith('bot_') || user.name.endsWith('_Bot');
-        const label   = user.department ? `${user.name} · ${user.department}` : user.name;
-        const videoEl = videoRegistry.getActive(user.name);
+        const isBot = user.user_id.startsWith('bot_') || user.name.endsWith('_Bot');
+        const label = user.department ? `${user.name} · ${user.department}` : user.name;
         return (
           <SmileyAvatar
             key={user.user_id}
@@ -62,7 +60,6 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag }: {
             isPlayer={false}
             isBot={isBot}
             animate={!isBot}
-            videoElement={videoEl}
           />
         );
       })}
@@ -74,7 +71,6 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag }: {
         name={name}
         isPlayer={true}
         animate={false}
-        videoElement={videoRegistry.getActive(name)}
         draggable
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}

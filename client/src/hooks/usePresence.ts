@@ -26,7 +26,7 @@ export function usePresence() {
   const connect = useCallback(() => {
     if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
 
-    intentional.current = false;
+    intentional.current = false;    // new connection is not closed correctly
     setWsStatus('connecting');
     setStatus('connecting');
 

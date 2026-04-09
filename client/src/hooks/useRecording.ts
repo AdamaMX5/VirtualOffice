@@ -104,14 +104,16 @@ export function useRecording() {
     const n = videoEls.length || 1;
     const { cols, rows } = gridDims(n);
 
-    // Mirror MeetingOverlay: 1.5% padding + 1.5% gaps
+    // Mirror MeetingOverlay: 1.5% padding + 1.5% gaps, tiles enforce 16:9
     const PAD  = Math.round(canvas.width  * 0.015);
     const GAP  = Math.round(canvas.width  * 0.015);
     const GAP_V = Math.round(canvas.height * 0.015);
     const gridW = canvas.width  - 2 * PAD - (cols - 1) * GAP;
-    const gridH = canvas.height - 2 * PAD - (rows - 1) * GAP_V;
     const tileW = Math.floor(gridW / cols);
-    const tileH = Math.floor(gridH / rows);
+    const tileH = Math.floor(tileW * 9 / 16); // 16:9 wie MeetingOverlay aspectRatio CSS
+    // Kacheln vertikal zentrieren (falls Gesamthöhe < Canvas-Höhe)
+    const usedH = rows * tileH + (rows - 1) * GAP_V;
+    const offsetY = Math.floor((canvas.height - usedH) / 2);
 
     // Load background image once
     let bgImg: HTMLImageElement | null = null;
@@ -148,7 +150,7 @@ export function useRecording() {
         const col = i % cols;
         const row = Math.floor(i / cols);
         const x = PAD + col * (tileW + GAP);
-        const y = PAD + row * (tileH + GAP_V);
+        const y = offsetY + row * (tileH + GAP_V);
 
         if (el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
           // objectFit: cover — crop video to fill 16:9 tile
