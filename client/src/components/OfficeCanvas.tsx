@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Stage } from 'react-konva';
 import GroundLayer from './layers/GroundLayer';
 import BuildingLayer from './layers/BuildingLayer';
+import FurnitureLayer from './layers/FurnitureLayer';
 import AvatarLayer from './layers/AvatarLayer';
 import HUD from './hud/HUD';
 import ControlsHint from './hud/ControlsHint';
@@ -11,6 +12,7 @@ import VideoGrid from './media/VideoGrid';
 import MediaControls from './media/MediaControls';
 import ConnectionErrorModal from './media/ConnectionErrorModal';
 import MeetingOverlay from './meeting/MeetingOverlay';
+import FurniturePanel from './furniture/FurniturePanel';
 import { usePresence } from '../hooks/usePresence';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { useCamera } from '../hooks/useCamera';
@@ -18,6 +20,8 @@ import { useTokenRefresh } from '../hooks/useTokenRefresh';
 import { useMeetingRoom } from '../hooks/useMeetingRoom';
 import { useCameraStore } from '../model/stores/cameraStore';
 import { usePlayerStore } from '../model/stores/playerStore';
+import { useFurnitureStore } from '../model/stores/furnitureStore';
+import { loadCatalog, loadPlacedItems, placeItem, resizeItem } from '../services/furnitureService';
 import { P, ZOOM_MAX, ZOOM_MIN } from '../model/constants';
 
 function useStageSize() {
@@ -35,29 +39,57 @@ const OfficeCanvas = () => {
   const { scale, offset } = useCameraStore();
   const [showMeeting, setShowMeeting] = useState(false);
 
+  const currentRoom = usePlayerStore((s) => s.currentRoom);
+  const { furnitureModeActive, selectedId, pendingCatalogItem,
+          toggleFurnitureMode, selectItem, setPendingCatalogItem } = useFurnitureStore();
+
+  // Möbel beim Start + Raumwechsel laden
+  useEffect(() => {
+    loadCatalog();
+    loadPlacedItems(currentRoom ?? undefined);
+  }, [currentRoom]);
+
+  // ESC: Platzierungs-Modus abbrechen oder Möbel deselektieren
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (pendingCatalogItem) { setPendingCatalogItem(null); return; }
+      if (selectedId)         { selectItem(null); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pendingCatalogItem, selectedId, setPendingCatalogItem, selectItem]);
+
+  // ── Linke Maustaste tracken (für Scroll-Resize) ────────────────────────────
+  const leftMouseRef = useRef(false);
+  useEffect(() => {
+    const down = (e: MouseEvent) => { if (e.button === 0) leftMouseRef.current = true;  };
+    const up   = (e: MouseEvent) => { if (e.button === 0) leftMouseRef.current = false; };
+    window.addEventListener('mousedown', down);
+    window.addEventListener('mouseup',   up);
+    return () => {
+      window.removeEventListener('mousedown', down);
+      window.removeEventListener('mouseup',   up);
+    };
+  }, []);
+
   // Presence-WebSocket
   const { sendMove, sendRefreshToken } = usePresence();
-
-  // Auto-Connect zum Meeting-Raum beim Betreten
   useMeetingRoom();
-
-  // Token-Refresh
-  useTokenRefresh({
-    onNewToken: sendRefreshToken,
-  });
+  useTokenRefresh({ onNewToken: sendRefreshToken });
 
   // Kamera (Zoom + Drag)
   const { handleWheel, startDrag, updateDrag } = useCamera(size.w, size.h);
 
-  // Game-Loop (WASD + Bewegung)
+  // Game-Loop
   const { updateFromDrag } = useGameLoop({
     sendMove,
-    stageWidth: size.w,
+    stageWidth:  size.w,
     stageHeight: size.h,
-    paused: showMeeting,
+    paused:      showMeeting,
   });
 
-  // ── Touch: 1-Finger-Pan + 2-Finger-Pinch/Zoom ──────────────────────────────
+  // ── Touch-Gesten ──────────────────────────────────────────────────────────
   const touchPanRef = useRef<{
     active: boolean;
     startOffset: { x: number; y: number };
@@ -69,16 +101,14 @@ const OfficeCanvas = () => {
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 1) {
         const t = e.touches[0];
-        // Skip if touch started on the joystick
         if ((e.target as HTMLElement).closest?.('[data-joystick]')) return;
-        // Skip if touch is near the local avatar (let Konva's draggable handle it)
-        const cam = useCameraStore.getState();
+        const cam    = useCameraStore.getState();
         const player = usePlayerStore.getState();
-        const ax = player.wx * P * cam.scale + cam.offset.x;
-        const ay = player.wy * P * cam.scale + cam.offset.y;
+        const ax   = player.wx * P * cam.scale + cam.offset.x;
+        const ay   = player.wy * P * cam.scale + cam.offset.y;
         const dist2 = (t.clientX - ax) ** 2 + (t.clientY - ay) ** 2;
         const hitR  = (16 * cam.scale + 14) ** 2;
-        if (dist2 < hitR) return; // on avatar → let Konva handle drag
+        if (dist2 < hitR) return;
         cam.setFollow(false);
         touchPanRef.current = {
           active: true,
@@ -110,11 +140,11 @@ const OfficeCanvas = () => {
         const midX = (t0.clientX + t1.clientX) / 2;
         const midY = (t0.clientY + t1.clientY) / 2;
         const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
-        const cam  = useCameraStore.getState();
+        const cam      = useCameraStore.getState();
         const oldScale = cam.scale;
         const newScale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, oldScale * dist / pinchRef.current.prevDist));
-        const dMidX = midX - pinchRef.current.prevMidX;
-        const dMidY = midY - pinchRef.current.prevMidY;
+        const dMidX    = midX - pinchRef.current.prevMidX;
+        const dMidY    = midY - pinchRef.current.prevMidY;
         const afterPanX = cam.offset.x + dMidX;
         const afterPanY = cam.offset.y + dMidY;
         cam.setScale(newScale);
@@ -143,7 +173,7 @@ const OfficeCanvas = () => {
     };
   }, []);
 
-  // Rechtsklick-Drag State
+  // ── Rechtsklick-Drag ──────────────────────────────────────────────────────
   const dragStateRef = useRef<{
     active: boolean;
     startOffset: { x: number; y: number };
@@ -173,30 +203,79 @@ const OfficeCanvas = () => {
     };
   }, [updateDrag]);
 
+  // ── Scroll: Möbel-Resize ODER Kamera-Zoom ────────────────────────────────
   const handleWheel2 = useCallback((e: { evt: WheelEvent }) => {
-    const ptr = { x: e.evt.clientX, y: e.evt.clientY };
-    handleWheel(e.evt, ptr.x, ptr.y);
+    const { furnitureModeActive: fma, selectedId: sid } = useFurnitureStore.getState();
+
+    if (fma && sid && leftMouseRef.current) {
+      // Resize des ausgewählten Möbelstücks
+      e.evt.preventDefault();
+      const factor = e.evt.deltaY < 0 ? 1.08 : 0.93;
+      const items  = useFurnitureStore.getState().placedItems;
+      const item   = items.find((i) => i.id === sid);
+      if (item) {
+        const newW = Math.max(0.5, item.width  * factor);
+        const newH = Math.max(0.5, item.height * factor);
+        resizeItem(sid, newW, newH);
+      }
+      return;
+    }
+
+    handleWheel(e.evt, e.evt.clientX, e.evt.clientY);
   }, [handleWheel]);
+
+  // ── Stage-Klick: Möbel platzieren oder deselektieren ──────────────────────
+  const handleStageClick = useCallback((e: { evt: MouseEvent; target: unknown; currentTarget: unknown }) => {
+    if (e.evt.button !== 0) return;
+    if (!useFurnitureStore.getState().furnitureModeActive) return;
+    // Nur wenn direkt auf den Stage geklickt (nicht auf ein Kind-Node)
+    if (e.target !== e.currentTarget) return;
+
+    const pending = useFurnitureStore.getState().pendingCatalogItem;
+    if (pending) {
+      const cam  = useCameraStore.getState();
+      const tileX = (e.evt.clientX - cam.offset.x) / (cam.scale * P);
+      const tileY = (e.evt.clientY - cam.offset.y) / (cam.scale * P);
+      placeItem(pending, tileX, tileY, usePlayerStore.getState().currentRoom ?? undefined);
+      useFurnitureStore.getState().setPendingCatalogItem(null);
+    } else {
+      useFurnitureStore.getState().selectItem(null);
+    }
+  }, []);
 
   const layerProps = { x: offset.x, y: offset.y, scaleX: scale, scaleY: scale };
 
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'relative', touchAction: 'none' }}>
+    <div style={{
+      width: '100vw', height: '100vh', position: 'relative', touchAction: 'none',
+      cursor: furnitureModeActive && pendingCatalogItem ? 'crosshair' : 'default',
+    }}>
+      {/* Furniture-Mode-Overlay: leichter blauer Rahmen */}
+      {furnitureModeActive && (
+        <div style={{
+          position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 50,
+          boxShadow: 'inset 0 0 0 3px rgba(99,179,237,0.4)',
+          borderRadius: 0,
+        }} />
+      )}
+
       <Stage
         width={size.w}
         height={size.h}
         onWheel={handleWheel2}
         onMousedown={handleMouseDown}
+        onClick={handleStageClick}
         onContextmenu={(e: { evt: MouseEvent }) => e.evt.preventDefault()}
         style={{ position: 'absolute', top: 0, left: 0 }}
       >
-        <GroundLayer   {...layerProps} />
-        <BuildingLayer {...layerProps} />
-        <AvatarLayer   {...layerProps} updateFromDrag={updateFromDrag} />
+        <GroundLayer    {...layerProps} />
+        <BuildingLayer  {...layerProps} />
+        <FurnitureLayer {...layerProps} />
+        <AvatarLayer    {...layerProps} updateFromDrag={updateFromDrag} />
       </Stage>
 
-      {/* HTML-Overlays außerhalb des Canvas */}
-      <HUD onOpenMeeting={() => setShowMeeting(true)} />
+      {/* HTML-Overlays */}
+      <HUD onOpenMeeting={() => setShowMeeting(true)} onToggleFurniture={toggleFurnitureMode} furnitureModeActive={furnitureModeActive} />
       <ControlsHint />
       <VideoManager />
       <VideoGrid />
@@ -204,6 +283,7 @@ const OfficeCanvas = () => {
       {showMeeting && <MeetingOverlay onClose={() => setShowMeeting(false)} />}
       <ConnectionErrorModal />
       <VirtualJoystick />
+      {furnitureModeActive && <FurniturePanel onClose={toggleFurnitureMode} />}
     </div>
   );
 };

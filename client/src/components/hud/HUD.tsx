@@ -78,9 +78,11 @@ function wsStatusLabel(status: string): string {
 
 interface HUDProps {
   onOpenMeeting?: () => void;
+  onToggleFurniture?: () => void;
+  furnitureModeActive?: boolean;
 }
 
-const HUD = ({ onOpenMeeting }: HUDProps) => {
+const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive }: HUDProps) => {
   const { wx, wy, currentRoom } = usePlayerStore();
   const scale         = useCameraStore((s) => s.scale);
   const wsStatus      = usePresenceStore((s) => s.wsStatus);
@@ -88,9 +90,10 @@ const HUD = ({ onOpenMeeting }: HUDProps) => {
   const openModal     = useAuthStore((s) => s.openModal);
   const liveKitStatus = useLiveKitStore((s) => s.status);
 
-  const showLoginBtn   = authStatus !== 'connected_auth';
-  const inMeeting      = currentRoom === 'Meetingraum';
-  const meetingReady   = inMeeting && liveKitStatus === 'connected';
+  const showLoginBtn = authStatus !== 'connected_auth';
+  const isAuth       = authStatus === 'connected_auth';
+  const inMeeting    = currentRoom === 'Meetingraum';
+  const meetingReady = inMeeting && liveKitStatus === 'connected';
 
   return (
     <div style={hudStyle}>
@@ -115,6 +118,22 @@ const HUD = ({ onOpenMeeting }: HUDProps) => {
       {meetingReady && (
         <button style={meetingBtnStyle} onClick={onOpenMeeting}>
           📺 Ansicht
+        </button>
+      )}
+      {isAuth && (
+        <button
+          style={{
+            ...meetingBtnStyle,
+            background: furnitureModeActive
+              ? 'rgba(99,179,237,0.7)'
+              : 'rgba(15,15,19,0.85)',
+            border: furnitureModeActive
+              ? '1px solid rgba(99,179,237,0.8)'
+              : '1px solid rgba(255,255,255,0.15)',
+          }}
+          onClick={onToggleFurniture}
+        >
+          🪑 {furnitureModeActive ? 'Möbelmodus aktiv' : 'Möbel'}
         </button>
       )}
       {showLoginBtn && (
