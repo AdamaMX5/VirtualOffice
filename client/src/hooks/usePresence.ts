@@ -2,8 +2,18 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useAuthStore } from '../model/stores/authStore';
 import { usePresenceStore } from '../model/stores/presenceStore';
 import { usePlayerStore } from '../model/stores/playerStore';
+import { useMessageStore } from '../model/stores/messageStore';
+import { getUnreadCount } from '../services/messageClient';
 import { WS_PATH } from '../model/constants';
 import type { WsInbound, WsOutbound } from '../model/types';
+
+// ── Modul-Level Send-Singleton (wie getRoom() in useLiveKit) ──────────────────
+let _wsSend: ((msg: WsOutbound) => void) | null = null;
+
+/** Sendet eine Nachricht über den Presence-WebSocket von überall im Code. */
+export function presenceSend(msg: WsOutbound): void {
+  _wsSend?.(msg);
+}
 
 const MAX_DELAY = 10_000;
 
@@ -76,6 +86,12 @@ export function usePresence() {
         case 'user_left':
           removeUser(data.user_id);
           break;
+        case 'new_message':
+          // Sofort Unread-Count neu laden (kein Polling-Delay)
+          getUnreadCount()
+            .then((n) => useMessageStore.getState().setUnreadTotal(n))
+            .catch(() => {});
+          break;
       }
     };
 
@@ -123,6 +139,9 @@ export function usePresence() {
       socketRef.current.send(JSON.stringify(msg));
     }
   }, []);
+
+  // Singleton registrieren
+  _wsSend = send;
 
   const sendMove = useCallback((x: number, y: number) => {
     send({ type: 'move', x, y });

@@ -4,6 +4,7 @@ import { usePresenceStore } from '../../model/stores/presenceStore';
 import { useCameraStore } from '../../model/stores/cameraStore';
 import { useAuthStore } from '../../model/stores/authStore';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
+import { useMessageStore } from '../../model/stores/messageStore';
 
 const isTouchDevice =
   typeof window !== 'undefined' &&
@@ -80,15 +81,18 @@ interface HUDProps {
   onOpenMeeting?: () => void;
   onToggleFurniture?: () => void;
   furnitureModeActive?: boolean;
+  onToggleMessages?: () => void;
+  messagesPanelOpen?: boolean;
 }
 
-const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive }: HUDProps) => {
+const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMessages, messagesPanelOpen }: HUDProps) => {
   const { wx, wy, currentRoom } = usePlayerStore();
   const scale         = useCameraStore((s) => s.scale);
   const wsStatus      = usePresenceStore((s) => s.wsStatus);
   const authStatus    = useAuthStore((s) => s.authStatus);
   const openModal     = useAuthStore((s) => s.openModal);
   const liveKitStatus = useLiveKitStore((s) => s.status);
+  const unreadTotal   = useMessageStore((s) => s.unreadTotal);
 
   const showLoginBtn = authStatus !== 'connected_auth';
   const isAuth       = authStatus === 'connected_auth';
@@ -134,6 +138,35 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive }: HUDProps
           onClick={onToggleFurniture}
         >
           🪑 {furnitureModeActive ? 'Möbelmodus aktiv' : 'Möbel'}
+        </button>
+      )}
+      {isAuth && (
+        <button
+          onClick={onToggleMessages}
+          style={{
+            ...meetingBtnStyle,
+            background: messagesPanelOpen
+              ? 'rgba(79,142,247,0.7)'
+              : 'rgba(15,15,19,0.85)',
+            border: messagesPanelOpen
+              ? '1px solid rgba(99,179,237,0.8)'
+              : '1px solid rgba(255,255,255,0.15)',
+            position: 'relative',
+          }}
+        >
+          💬 Nachrichten
+          {unreadTotal > 0 && (
+            <span style={{
+              position: 'absolute', top: -6, right: -6,
+              background: '#ef4444',
+              color: '#fff', fontSize: 10, fontWeight: 700,
+              borderRadius: 10, padding: '1px 6px',
+              minWidth: 18, textAlign: 'center',
+              lineHeight: '16px',
+            }}>
+              {unreadTotal > 99 ? '99+' : unreadTotal}
+            </span>
+          )}
         </button>
       )}
       {showLoginBtn && (

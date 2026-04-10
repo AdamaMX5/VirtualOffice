@@ -13,6 +13,7 @@ import MediaControls from './media/MediaControls';
 import ConnectionErrorModal from './media/ConnectionErrorModal';
 import MeetingOverlay from './meeting/MeetingOverlay';
 import FurniturePanel from './furniture/FurniturePanel';
+import MessagesPanel from './messages/MessagesPanel';
 import { usePresence } from '../hooks/usePresence';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { useCamera } from '../hooks/useCamera';
@@ -21,6 +22,8 @@ import { useMeetingRoom } from '../hooks/useMeetingRoom';
 import { useCameraStore } from '../model/stores/cameraStore';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useFurnitureStore } from '../model/stores/furnitureStore';
+import { useMessageStore } from '../model/stores/messageStore';
+import { useMessaging } from '../hooks/useMessaging';
 import { loadCatalog, loadPlacedItems, placeItem, resizeItem } from '../services/furnitureService';
 import { P, ZOOM_MAX, ZOOM_MIN } from '../model/constants';
 
@@ -42,6 +45,11 @@ const OfficeCanvas = () => {
   const currentRoom = usePlayerStore((s) => s.currentRoom);
   const { furnitureModeActive, selectedId, pendingCatalogItem,
           toggleFurnitureMode, selectItem, setPendingCatalogItem } = useFurnitureStore();
+  const { panelOpen: messagesPanelOpen, togglePanel: toggleMessagesPanel,
+          closePanel: closeMessagesPanel } = useMessageStore();
+
+  // Polling + Echtzeit-Notifications (läuft dauerhaft)
+  useMessaging();
 
   // Möbel beim Start + Raumwechsel laden
   useEffect(() => {
@@ -275,7 +283,13 @@ const OfficeCanvas = () => {
       </Stage>
 
       {/* HTML-Overlays */}
-      <HUD onOpenMeeting={() => setShowMeeting(true)} onToggleFurniture={toggleFurnitureMode} furnitureModeActive={furnitureModeActive} />
+      <HUD
+        onOpenMeeting={() => setShowMeeting(true)}
+        onToggleFurniture={toggleFurnitureMode}
+        furnitureModeActive={furnitureModeActive}
+        onToggleMessages={toggleMessagesPanel}
+        messagesPanelOpen={messagesPanelOpen}
+      />
       <ControlsHint />
       <VideoManager />
       <VideoGrid />
@@ -284,6 +298,7 @@ const OfficeCanvas = () => {
       <ConnectionErrorModal />
       <VirtualJoystick />
       {furnitureModeActive && <FurniturePanel onClose={toggleFurnitureMode} />}
+      {messagesPanelOpen  && <MessagesPanel  onClose={closeMessagesPanel} />}
     </div>
   );
 };
