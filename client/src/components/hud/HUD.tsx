@@ -94,8 +94,9 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
   const liveKitStatus = useLiveKitStore((s) => s.status);
   const unreadTotal   = useMessageStore((s) => s.unreadTotal);
 
-  const showLoginBtn = authStatus !== 'connected_auth';
-  const isAuth       = authStatus === 'connected_auth';
+  const jwt          = useAuthStore((s) => s.jwt);
+  const isAuth       = jwt !== null;
+  const showLoginBtn = !isAuth;
   const inMeeting    = currentRoom === 'Meetingraum';
   const meetingReady = inMeeting && liveKitStatus === 'connected';
 

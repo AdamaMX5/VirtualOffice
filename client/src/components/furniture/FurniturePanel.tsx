@@ -195,8 +195,8 @@ interface Props {
 const FurniturePanel: React.FC<Props> = ({ onClose }) => {
   const { catalogItems, pendingCatalogItem, selectedId, placedItems,
           setPendingCatalogItem, selectItem } = useFurnitureStore();
-  const authStatus = useAuthStore((s) => s.authStatus);
-  const isAuth     = authStatus === 'connected_auth';
+  const jwt    = useAuthStore((s) => s.jwt);
+  const isAuth = jwt !== null;
   const ownerId    = getJwtUserId();
 
   const [activeGroup, setActiveGroup] = useState<string>('Alle');

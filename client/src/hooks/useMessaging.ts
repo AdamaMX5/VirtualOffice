@@ -11,8 +11,8 @@ import {
 const POLL_INTERVAL_MS = 30_000;
 
 export function useMessaging() {
-  const authStatus = useAuthStore((s) => s.authStatus);
-  const isAuth     = authStatus === 'connected_auth';
+  const jwt    = useAuthStore((s) => s.jwt);
+  const isAuth = jwt !== null;
   const store      = useMessageStore();
 
   // ── 30s Polling des Unread-Count ─────────────────────────────────────────
