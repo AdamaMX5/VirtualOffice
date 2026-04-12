@@ -274,12 +274,12 @@ const OfficeCanvas = () => {
         onMousedown={handleMouseDown}
         onClick={handleStageClick}
         onContextmenu={(e: { evt: MouseEvent }) => e.evt.preventDefault()}
-        style={{ position: 'absolute', top: 0, left: 0 }}
+        style={{ position: 'absolute', top: 0, left: 0, visibility: showMeeting ? 'hidden' : 'visible' }}
       >
         <GroundLayer    {...layerProps} />
         <BuildingLayer  {...layerProps} />
         <FurnitureLayer {...layerProps} />
-        <AvatarLayer    {...layerProps} updateFromDrag={updateFromDrag} />
+        <AvatarLayer    {...layerProps} updateFromDrag={updateFromDrag} paused={showMeeting} />
       </Stage>
 
       {/* HTML-Overlays */}

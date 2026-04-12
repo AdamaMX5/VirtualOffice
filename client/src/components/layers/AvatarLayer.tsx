@@ -8,9 +8,10 @@ import { useCameraStore } from '../../model/stores/cameraStore';
 import { P } from '../../model/constants';
 import SmileyAvatar from '../avatars/SmileyAvatar';
 
-const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag }: {
+const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }: {
   x: number; y: number; scaleX: number; scaleY: number;
   updateFromDrag: (wx: number, wy: number) => void;
+  paused?: boolean;
 }) => {
   const { wx, wy, name } = usePlayerStore();
   const remoteUsers  = usePresenceStore((s) => s.remoteUsers);
@@ -35,10 +36,13 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag }: {
 
   // Eigener RAF-Loop: ruft layer.draw() direkt auf, damit Video-Frames
   // jeden Frame neu gezeichnet werden (Konva.Animation batcht zu aggressiv).
+  // Pausiert wenn Meeting-Overlay aktiv ist (spart GPU während Video-Dekodierung).
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
   useEffect(() => {
     let rafId: number;
     const tick = () => {
-      layerRef.current?.draw();
+      if (!pausedRef.current) layerRef.current?.draw();
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
