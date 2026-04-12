@@ -62,8 +62,9 @@ export function useMessaging() {
     try {
       const msg = await apiSendMessage(recipientId, body);
       // Optimistisch zur aktiven Konversation hinzufügen
-      if (store.activeUserId === recipientId) {
-        store.addActiveMessage(msg);
+      const { activeUserId, addActiveMessage } = useMessageStore.getState();
+      if (activeUserId === recipientId) {
+        addActiveMessage(msg);
       }
       // Empfänger über PresenceService benachrichtigen, wenn er online ist
       const onlineUsers = usePresenceStore.getState().remoteUsers;
@@ -75,7 +76,7 @@ export function useMessaging() {
       console.error('[messaging] Senden fehlgeschlagen:', err);
       return false;
     }
-  }, [store.activeUserId]);
+  }, []);
 
   return { loadInbox, openConversation, sendMessage };
 }

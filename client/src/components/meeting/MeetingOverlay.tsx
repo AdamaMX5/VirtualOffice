@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useReducer, useState, useCallback } from 'rea
 import { Participant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useParticipantVolumeStore } from '../../model/stores/participantVolumeStore';
+import { useMessageStore } from '../../model/stores/messageStore';
 import { getRoom } from '../../hooks/useLiveKit';
 import { useRecording } from '../../hooks/useRecording';
 
@@ -225,8 +226,11 @@ interface OverlayProps {
 }
 
 const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
-  const participantIds = useLiveKitStore((s) => s.participantIds);
-  const speakerEnabled = useLiveKitStore((s) => s.speakerEnabled);
+  const participantIds  = useLiveKitStore((s) => s.participantIds);
+  const speakerEnabled  = useLiveKitStore((s) => s.speakerEnabled);
+  const unreadTotal     = useMessageStore((s) => s.unreadTotal);
+  const messagesPanelOpen = useMessageStore((s) => s.panelOpen);
+  const toggleMessages  = useMessageStore((s) => s.togglePanel);
   const { isRecording, startRecording, stopRecording, tabHidden } = useRecording();
 
   const [bgUrl, setBgUrl]   = useState<string | null>(null);
@@ -353,6 +357,30 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
             ✕ Hintergrund
           </button>
         )}
+
+        {/* Nachrichten-Button */}
+        <button
+          onClick={toggleMessages}
+          style={{
+            ...btnBase,
+            background: messagesPanelOpen ? 'rgba(79,142,247,0.7)' : 'rgba(15,15,19,0.85)',
+            border: messagesPanelOpen ? '1px solid rgba(99,179,237,0.8)' : '1px solid rgba(255,255,255,0.15)',
+            position: 'relative',
+          }}
+        >
+          💬 Nachrichten
+          {unreadTotal > 0 && (
+            <span style={{
+              position: 'absolute', top: -6, right: -6,
+              background: '#ef4444', color: '#fff',
+              fontSize: 10, fontWeight: 700,
+              borderRadius: 10, padding: '1px 6px',
+              minWidth: 18, textAlign: 'center', lineHeight: '16px',
+            }}>
+              {unreadTotal > 99 ? '99+' : unreadTotal}
+            </span>
+          )}
+        </button>
 
         {/* Schließen-Button */}
         <button onClick={handleClose} style={btnBase}>

@@ -18,6 +18,10 @@ async function msgFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
       ...(options.headers as Record<string, string> | undefined),
     },
   });
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    if (!res.ok) throw new Error('MessageService-Fehler');
+    return undefined as T;
+  }
   const data = await res.json() as Record<string, unknown>;
   if (!res.ok) throw new Error(String(data.error ?? data.detail ?? 'MessageService-Fehler'));
   return data as T;

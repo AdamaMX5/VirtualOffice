@@ -14,7 +14,7 @@ const panel: React.CSSProperties = {
   right: 0,
   bottom: 0,
   width: 360,
-  zIndex: 300,
+  zIndex: 450,
   background: 'rgba(10,10,15,0.97)',
   borderLeft: '1px solid rgba(255,255,255,0.1)',
   backdropFilter: 'blur(12px)',
@@ -148,6 +148,7 @@ const ChatView: React.FC<{ userId: string; name: string; isOnline: boolean }> = 
   const { sendMessage } = useMessaging();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -158,8 +159,13 @@ const ChatView: React.FC<{ userId: string; name: string; isOnline: boolean }> = 
     const body = text.trim();
     if (!body || sending) return;
     setSending(true);
+    setSendError('');
     setText('');
-    await sendMessage(userId, body);
+    const ok = await sendMessage(userId, body);
+    if (!ok) {
+      setSendError('Senden fehlgeschlagen. Bitte erneut versuchen.');
+      setText(body);
+    }
     setSending(false);
   }, [text, sending, userId, sendMessage]);
 
@@ -213,8 +219,12 @@ const ChatView: React.FC<{ userId: string; name: string; isOnline: boolean }> = 
       <div style={{
         padding: '10px 12px',
         borderTop: '1px solid rgba(255,255,255,0.08)',
-        display: 'flex', gap: 8, flexShrink: 0,
+        display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0,
       }}>
+      {sendError && (
+        <div style={{ color: '#f87171', fontSize: 11, padding: '2px 4px' }}>{sendError}</div>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
         <textarea
           style={{ ...inputStyle, flex: 1, minHeight: 38, maxHeight: 120 }}
           placeholder="Nachricht schreiben… (Enter = senden)"
