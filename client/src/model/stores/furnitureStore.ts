@@ -35,7 +35,8 @@ interface FurnitureState {
 
   setCatalogItems: (items: CatalogItem[]) => void;
   setPlacedItems: (items: PlacedItem[]) => void;
-  addCatalogItem: (item: CatalogItem) => void;
+  addCatalogItem:    (item: CatalogItem) => void;
+  updateCatalogItem: (id: string, item: CatalogItem) => void;
   removeCatalogItem: (id: string) => void;
   addPlacedItem: (item: PlacedItem) => void;
   updatePlacedItem: (id: string, patch: Partial<PlacedItem>) => void;
@@ -56,6 +57,9 @@ export const useFurnitureStore = create<FurnitureState>((set) => ({
   setPlacedItems:  (items) => set({ placedItems: items }),
 
   addCatalogItem:    (item) => set((s) => ({ catalogItems: [...s.catalogItems, item] })),
+  updateCatalogItem: (id, item) => set((s) => ({
+    catalogItems: s.catalogItems.map((i) => (i.id === id ? item : i)),
+  })),
   removeCatalogItem: (id)   => set((s) => ({ catalogItems: s.catalogItems.filter((i) => i.id !== id) })),
 
   addPlacedItem: (item) => set((s) => ({ placedItems: [...s.placedItems, item] })),

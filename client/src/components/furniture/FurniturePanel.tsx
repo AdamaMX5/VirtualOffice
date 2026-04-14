@@ -11,15 +11,9 @@ import React, { useRef, useState, useCallback } from 'react';
 import { useFurnitureStore, CatalogItem } from '../../model/stores/furnitureStore';
 import { useAuthStore } from '../../model/stores/authStore';
 import { getJwtUserId } from '../../services/objectClient';
-import { uploadCatalogItem, deleteItem, deleteCatalogItem } from '../../services/furnitureService';
+import { uploadCatalogItem, deleteItem, deleteCatalogItem, updateCatalogItem } from '../../services/furnitureService';
 
 const PRESET_GROUPS = ['Arbeitsplätze', 'Sitzgelegenheiten', 'Boards', 'Dekoration', 'Sonstiges'];
-const PRESET_TYPES  = [
-  { value: 'desk',       label: 'Schreibtisch' },
-  { value: 'todo_board', label: 'Todo-Board' },
-  { value: 'chair',      label: 'Sessel' },
-  { value: 'decoration', label: 'Dekoration' },
-];
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -82,7 +76,7 @@ const tileStyle = (active: boolean): React.CSSProperties => ({
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  background: 'rgba(255,255,255,0.06)',
+  background: '#1e2433',
   border: '1px solid rgba(255,255,255,0.15)',
   borderRadius: 6,
   padding: '6px 10px',
@@ -109,7 +103,6 @@ const UploadForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file,    setFile]    = useState<File | null>(null);
   const [name,    setName]    = useState('');
-  const [type,    setType]    = useState('decoration');
   const [group,   setGroup]   = useState('Sonstiges');
   const [customG, setCustomG] = useState('');
   const [w,       setW]       = useState(2);
@@ -124,14 +117,15 @@ const UploadForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     setBusy(true);
     setError('');
     try {
-      await uploadCatalogItem(file, name.trim(), type, effectiveGroup, w, h);
+      await uploadCatalogItem(file, name.trim(), effectiveGroup, effectiveGroup, w, h);
       onDone();
     } catch (err) {
-      setError(String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg.replace(/^Error:\s*/, ''));
     } finally {
       setBusy(false);
     }
-  }, [file, name, type, effectiveGroup, w, h, onDone]);
+  }, [file, name, effectiveGroup, w, h, onDone]);
 
   return (
     <div style={{ padding: '8px 12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -148,14 +142,11 @@ const UploadForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
       <input style={inputStyle} placeholder="Name *" value={name}
         onChange={(e) => setName(e.target.value)} />
 
-      {/* Typ */}
-      <select style={inputStyle} value={type} onChange={(e) => setType(e.target.value)}>
-        {PRESET_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-      </select>
-
-      {/* Gruppe: Preset + manuell */}
+      {/* Gruppe */}
       <select style={inputStyle} value={group} onChange={(e) => setGroup(e.target.value)}>
-        {PRESET_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
+        {PRESET_GROUPS.map((g) => (
+          <option key={g} value={g} style={{ background: '#1e2433', color: '#fff' }}>{g}</option>
+        ))}
       </select>
       <input style={inputStyle} placeholder="Eigene Gruppe (optional)" value={customG}
         onChange={(e) => setCustomG(e.target.value)} />
@@ -186,6 +177,72 @@ const UploadForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   );
 };
 
+// ── Katalog-Item bearbeiten ───────────────────────────────────────────────────
+
+const EditCatalogForm: React.FC<{ item: CatalogItem; onDone: () => void }> = ({ item, onDone }) => {
+  const [name,    setName]    = useState(item.name);
+  const [group,   setGroup]   = useState(
+    PRESET_GROUPS.includes(item.group) ? item.group : 'Sonstiges',
+  );
+  const [customG, setCustomG] = useState(
+    PRESET_GROUPS.includes(item.group) ? '' : item.group,
+  );
+  const [w, setW] = useState(item.defaultWidth);
+  const [h, setH] = useState(item.defaultHeight);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const effectiveGroup = customG.trim() || group;
+
+  const handleSave = useCallback(async () => {
+    if (!name.trim()) { setError('Name darf nicht leer sein'); return; }
+    setBusy(true);
+    setError('');
+    try {
+      await updateCatalogItem(item.id, { name: name.trim(), group: effectiveGroup, defaultWidth: w, defaultHeight: h });
+      onDone();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg.replace(/^Error:\s*/, ''));
+    } finally {
+      setBusy(false);
+    }
+  }, [item.id, name, effectiveGroup, w, h, onDone]);
+
+  return (
+    <div style={{ padding: '8px 12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={sectionTitle}>✏ Bearbeiten</div>
+      <input style={inputStyle} placeholder="Name *" value={name}
+        onChange={(e) => setName(e.target.value)} />
+      <select style={inputStyle} value={group} onChange={(e) => setGroup(e.target.value)}>
+        {PRESET_GROUPS.map((g) => (
+          <option key={g} value={g} style={{ background: '#1e2433', color: '#fff' }}>{g}</option>
+        ))}
+      </select>
+      <input style={inputStyle} placeholder="Eigene Gruppe (optional)" value={customG}
+        onChange={(e) => setCustomG(e.target.value)} />
+      <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Breite (Tiles)</label>
+          <input style={inputStyle} type="number" min={0.5} max={20} step={0.5}
+            value={w} onChange={(e) => setW(Number(e.target.value))} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Höhe (Tiles)</label>
+          <input style={inputStyle} type="number" min={0.5} max={20} step={0.5}
+            value={h} onChange={(e) => setH(Number(e.target.value))} />
+        </div>
+      </div>
+      {error && <div style={{ color: '#f87171', fontSize: 11 }}>{error}</div>}
+      <button style={btnStyle(busy ? 'rgba(79,142,247,0.4)' : undefined)}
+        onClick={handleSave} disabled={busy}>
+        {busy ? 'Speichert...' : '💾 Speichern'}
+      </button>
+      <button style={btnStyle('rgba(255,255,255,0.06)')} onClick={onDone}>Abbrechen</button>
+    </div>
+  );
+};
+
 // ── Hauptpanel ────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -199,8 +256,9 @@ const FurniturePanel: React.FC<Props> = ({ onClose }) => {
   const isAuth = jwt !== null;
   const ownerId    = getJwtUserId();
 
-  const [activeGroup, setActiveGroup] = useState<string>('Alle');
-  const [showUpload,  setShowUpload]  = useState(false);
+  const [activeGroup,  setActiveGroup]  = useState<string>('Alle');
+  const [showUpload,   setShowUpload]   = useState(false);
+  const [editingItem,  setEditingItem]  = useState<CatalogItem | null>(null);
 
   // Alle vorhandenen Gruppen aus dem Katalog + Presets
   const groups = ['Alle', ...Array.from(new Set([
@@ -291,6 +349,8 @@ const FurniturePanel: React.FC<Props> = ({ onClose }) => {
             <div style={sectionTitle}>PNG hochladen</div>
             <UploadForm onDone={() => setShowUpload(false)} />
           </>
+        ) : editingItem ? (
+          <EditCatalogForm item={editingItem} onDone={() => setEditingItem(null)} />
         ) : (
           isAuth && (
             <div style={{ padding: '8px 12px 4px' }}>
@@ -303,7 +363,7 @@ const FurniturePanel: React.FC<Props> = ({ onClose }) => {
         )}
 
         {/* Gruppen-Tabs */}
-        {!showUpload && (
+        {!showUpload && !editingItem && (
           <>
             <div style={{
               display: 'flex', gap: 4, flexWrap: 'wrap',
@@ -331,10 +391,23 @@ const FurniturePanel: React.FC<Props> = ({ onClose }) => {
             <div style={gridStyle}>
               {filtered.map((item) => (
                 <div key={item.id}
-                  style={tileStyle(pendingCatalogItem?.id === item.id)}
+                  style={{ ...tileStyle(pendingCatalogItem?.id === item.id), position: 'relative' }}
                   onClick={() => handleSelectCatalog(item)}
-                  title={`${item.name} · ${item.type}`}
+                  title={`${item.name} · ${item.group}`}
                 >
+                  {isAuth && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditingItem(item); }}
+                      style={{
+                        position: 'absolute', top: 2, right: 2,
+                        background: 'rgba(0,0,0,0.55)', border: 'none',
+                        borderRadius: 4, color: 'rgba(255,255,255,0.7)',
+                        fontSize: 10, cursor: 'pointer', padding: '1px 4px',
+                        lineHeight: 1.4,
+                      }}
+                      title="Bearbeiten"
+                    >✏</button>
+                  )}
                   <img
                     src={item.imageUrl}
                     alt={item.name}

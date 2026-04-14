@@ -11,18 +11,34 @@ import {
 const CATALOG_COL = 'furniture_catalog';
 const PLACED_COL  = 'office_furniture';
 
+// Normalisiert alte type-Werte und freie Strings auf kanonische Gruppen
+const GROUP_MAP: Record<string, string> = {
+  desk:           'Arbeitsplätze',
+  Schreibtisch:   'Arbeitsplätze',
+  Arbeitsplatz:   'Arbeitsplätze',
+  todo_board:     'Boards',
+  'Todo-Board':   'Boards',
+  Board:          'Boards',
+  chair:          'Sitzgelegenheiten',
+  Sessel:         'Sitzgelegenheiten',
+  Stuhl:          'Sitzgelegenheiten',
+  decoration:     'Dekoration',
+  Dekoration:     'Dekoration',
+};
+
 // ── Mapper ────────────────────────────────────────────────────────────────────
 
 function toCatalogItem(doc: ObjectDoc): CatalogItem {
   const d = doc.data;
+  const rawGroup = String(d.group ?? d.type ?? 'Sonstiges');
   return {
     id:            doc._id,
     name:          String(d.name          ?? ''),
-    type:          String(d.type          ?? 'decoration'),
+    type:          String(d.type          ?? rawGroup),
     imageUrl:      String(d.imageUrl      ?? ''),
     defaultWidth:  Number(d.defaultWidth  ?? 2),
     defaultHeight: Number(d.defaultHeight ?? 2),
-    group:         String(d.group         ?? 'Sonstiges'),
+    group:         GROUP_MAP[rawGroup] ?? rawGroup,
   };
 }
 
@@ -148,6 +164,14 @@ export async function uploadCatalogItem(
   const data = { name, type, group, imageUrl: url, defaultWidth, defaultHeight };
   const doc = await createObject(CATALOG_COL, data, { uploadedBy: ownerId });
   useFurnitureStore.getState().addCatalogItem(toCatalogItem(doc));
+}
+
+export async function updateCatalogItem(
+  id: string,
+  fields: { name?: string; group?: string; defaultWidth?: number; defaultHeight?: number },
+): Promise<void> {
+  const doc = await patchObject(CATALOG_COL, id, fields);
+  useFurnitureStore.getState().updateCatalogItem(id, toCatalogItem(doc));
 }
 
 export async function deleteCatalogItem(id: string): Promise<void> {
