@@ -15,6 +15,7 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
 }) => {
   const { wx, wy, name } = usePlayerStore();
   const remoteUsers  = usePresenceStore((s) => s.remoteUsers);
+  const chatBubbles  = usePresenceStore((s) => s.chatBubbles);
   // trackVersion als Re-Render-Trigger wenn Video-Tracks sich ändern
   useLiveKitStore((s) => s.trackVersion);
 
@@ -64,6 +65,7 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
             isPlayer={false}
             isBot={isBot}
             animate={!isBot}
+            chatText={chatBubbles[user.user_id]}
           />
         );
       })}
@@ -75,6 +77,7 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
         name={name}
         isPlayer={true}
         animate={false}
+        chatText={chatBubbles['__self__']}
         draggable
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}

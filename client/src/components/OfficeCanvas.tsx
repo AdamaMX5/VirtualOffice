@@ -7,6 +7,7 @@ import AvatarLayer from './layers/AvatarLayer';
 import HUD from './hud/HUD';
 import ControlsHint from './hud/ControlsHint';
 import VirtualJoystick from './hud/VirtualJoystick';
+import ChatInput from './hud/ChatInput';
 import VideoManager from './media/VideoManager';
 import VideoGrid from './media/VideoGrid';
 import MediaControls from './media/MediaControls';
@@ -291,6 +292,7 @@ const OfficeCanvas = () => {
         messagesPanelOpen={messagesPanelOpen}
       />
       <ControlsHint />
+      <ChatInput />
       <VideoManager />
       <VideoGrid />
       <MediaControls />

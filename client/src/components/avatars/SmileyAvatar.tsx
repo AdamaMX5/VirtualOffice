@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Group, Circle, Shape, Text } from 'react-konva';
+import { Group, Circle, Shape, Text, Rect } from 'react-konva';
 import type Konva from 'konva';
 import { P } from '../../model/constants';
 
@@ -11,6 +11,7 @@ interface SmileyAvatarProps {
   isBot?: boolean;
   animate?: boolean;  // true für Remote-User (Konva-Tween)
   videoElement?: HTMLVideoElement | null;
+  chatText?: string;  // aktuelle Sprechblasen-Nachricht
   // Drag-to-Move (nur lokaler Spieler)
   draggable?: boolean;
   onDragStart?: () => void;
@@ -18,7 +19,7 @@ interface SmileyAvatarProps {
   onDragEnd?:  (e: Konva.KonvaEventObject<DragEvent>) => void;
 }
 
-const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false, videoElement, draggable, onDragStart, onDragMove, onDragEnd }: SmileyAvatarProps) => {
+const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false, videoElement, chatText, draggable, onDragStart, onDragMove, onDragEnd }: SmileyAvatarProps) => {
   const groupRef = useRef<Konva.Group>(null);
 
   // Smooth-Interpolation für Remote-User per Konva-Tween
@@ -120,6 +121,44 @@ const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, 
       {/* Spieler-Ring (immer sichtbar) */}
       {isPlayer && (
         <Circle radius={21} stroke="#fde68a" strokeWidth={1.5} dash={[4, 3]} opacity={0.7} />
+      )}
+
+      {/* Sprechblase */}
+      {chatText && (
+        <>
+          <Rect
+            x={-65} y={-58}
+            width={130} height={26}
+            fill="rgba(255,255,255,0.96)"
+            cornerRadius={8}
+            shadowColor="rgba(0,0,0,0.25)"
+            shadowBlur={6}
+            shadowOffsetY={2}
+          />
+          {/* Schweif-Dreieck */}
+          <Shape
+            sceneFunc={(ctx, shape) => {
+              ctx.beginPath();
+              ctx.moveTo(-7, -32);
+              ctx.lineTo(7, -32);
+              ctx.lineTo(0, -22);
+              ctx.closePath();
+              ctx.fillShape(shape);
+            }}
+            fill="rgba(255,255,255,0.96)"
+          />
+          <Text
+            text={chatText}
+            fontSize={11}
+            fontStyle="bold"
+            fill="#1e293b"
+            x={-57} y={-52}
+            width={114}
+            align="center"
+            wrap="none"
+            ellipsis
+          />
+        </>
       )}
 
       {/* Name-Label */}

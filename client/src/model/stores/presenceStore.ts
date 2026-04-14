@@ -7,6 +7,7 @@ interface PresenceState {
   remoteUsers: RemoteUsersMap;
   wsStatus: WsStatus;
   reconnectDelay: number; // ms
+  chatBubbles: Record<string, string>; // userId → aktueller Sprechblasentext
   // Actions
   applySnapshot: (users: RemoteUser[]) => void;
   addOrUpdateUser: (user: RemoteUser) => void;
@@ -15,12 +16,15 @@ interface PresenceState {
   setWsStatus: (status: WsStatus) => void;
   setReconnectDelay: (delay: number) => void;
   resetUsers: () => void;
+  setChatBubble: (userId: string, text: string) => void;
+  clearChatBubble: (userId: string) => void;
 }
 
 export const usePresenceStore = create<PresenceState>((set) => ({
   remoteUsers: {},
   wsStatus: 'disconnected',
   reconnectDelay: 1000,
+  chatBubbles: {},
 
   applySnapshot: (users) =>
     set({
@@ -54,4 +58,12 @@ export const usePresenceStore = create<PresenceState>((set) => ({
   setWsStatus: (wsStatus) => set({ wsStatus }),
   setReconnectDelay: (reconnectDelay) => set({ reconnectDelay }),
   resetUsers: () => set({ remoteUsers: {} }),
+  setChatBubble: (userId, text) =>
+    set((s) => ({ chatBubbles: { ...s.chatBubbles, [userId]: text } })),
+  clearChatBubble: (userId) =>
+    set((s) => {
+      const next = { ...s.chatBubbles };
+      delete next[userId];
+      return { chatBubbles: next };
+    }),
 }));

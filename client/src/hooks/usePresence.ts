@@ -92,6 +92,12 @@ export function usePresence() {
             .then((n) => useMessageStore.getState().setUnreadTotal(n))
             .catch(() => {});
           break;
+        case 'chat': {
+          const { setChatBubble, clearChatBubble } = usePresenceStore.getState();
+          setChatBubble(data.userId, data.text);
+          setTimeout(() => clearChatBubble(data.userId), 5000);
+          break;
+        }
       }
     };
 
