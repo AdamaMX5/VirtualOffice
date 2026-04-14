@@ -8,9 +8,15 @@ export const CAM_SPEED = 5;           // Pixel/Frame für Pfeil-Kamerasteuerung
 export const SEND_INTERVAL = 50;      // ms zwischen WS-Positionsupdates
 
 // Backend-URLs – direkt zu den Microservices
-export const AUTH_URL         = import.meta.env.VITE_AUTH_URL         ?? 'https://auth.freischule.info';
-export const PRESENCE_WS_URL  = import.meta.env.VITE_PRESENCE_WS_URL  ?? 'wss://presence.freischule.info';
-export const WS_PATH          = `${PRESENCE_WS_URL}/ws`;
+export const AUTH_URL = import.meta.env.VITE_AUTH_URL ?? 'https://auth.freischule.info';
+
+// Presence-WS: selber Host wie die App (integriert im Express-Server)
+const _wsOrigin = import.meta.env.VITE_PRESENCE_WS_URL ?? (
+  typeof window !== 'undefined'
+    ? (window.location.protocol === 'https:' ? 'wss' : 'ws') + '://' + window.location.host
+    : 'ws://localhost:3000'
+);
+export const WS_PATH = `${_wsOrigin}/ws`;
 export const OBJECT_URL       = import.meta.env.VITE_OBJECT_URL       ?? 'https://object.freischule.info';
 export const MEDIA_URL        = import.meta.env.VITE_MEDIA_URL        ?? 'https://media.freischule.info';
 export const MESSAGE_URL      = import.meta.env.VITE_MESSAGE_URL      ?? 'https://message.freischule.info';

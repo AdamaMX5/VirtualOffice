@@ -1,9 +1,6 @@
 import WebSocket from 'ws';
 import { config } from './config';
 
-const WS_URL = `${config.PRESENCE_WS_URL}/ws`;
-
-// Reception bot spawn position and wander radius (in tile units)
 const BOT_X      = 55;
 const BOT_Y      = 57;
 const BOT_RADIUS = 3;
@@ -14,14 +11,12 @@ function randomWander(center: number, radius: number): number {
 
 export function startReceptionBot(): void {
   let ws: WebSocket | null = null;
-  let moveTimer:      ReturnType<typeof setInterval>  | null = null;
-  let reconnectTimer: ReturnType<typeof setTimeout>   | null = null;
+  let moveTimer:      ReturnType<typeof setInterval> | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout>  | null = null;
   let reconnectDelay = 2_000;
 
   function send(msg: object) {
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(msg));
-    }
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   }
 
   function startWandering() {
@@ -34,12 +29,14 @@ export function startReceptionBot(): void {
   function connect() {
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 
-    console.log(`[Bot] Connecting to PresenceService at ${WS_URL} …`);
-    ws = new WebSocket(WS_URL);
+    // Bot verbindet sich zum eigenen lokalen WS-Server
+    const wsUrl = `ws://localhost:${config.PORT}/ws`;
+    console.log(`[Bot] Verbinde zu lokalem Presence-Server ${wsUrl} …`);
+    ws = new WebSocket(wsUrl);
 
     ws.on('open', () => {
       reconnectDelay = 2_000;
-      console.log('[Bot] Connected to PresenceService');
+      console.log('[Bot] Verbunden mit lokalem Presence-Server');
       send({ type: 'set_name', name: 'Empfang_Bot', department: 'bot' });
       send({ type: 'move', x: BOT_X, y: BOT_Y });
       startWandering();
@@ -47,16 +44,15 @@ export function startReceptionBot(): void {
 
     ws.on('close', () => {
       if (moveTimer) { clearInterval(moveTimer); moveTimer = null; }
-      console.log(`[Bot] Disconnected — reconnecting in ${reconnectDelay / 1000}s …`);
+      console.log(`[Bot] Getrennt — Reconnect in ${reconnectDelay / 1000}s …`);
       reconnectTimer = setTimeout(connect, reconnectDelay);
       reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
     });
 
-    ws.on('error', (err) => console.warn('[Bot] WS error:', err.message));
-
-    // Bot ignoriert eingehende Nachrichten (snapshot, user_joined, …)
+    ws.on('error', (err) => console.warn('[Bot] WS-Fehler:', err.message));
     ws.on('message', () => { /* noop */ });
   }
 
-  connect();
+  // Kurze Verzögerung damit der HTTP-Server zuerst startet
+  setTimeout(connect, 500);
 }

@@ -1,0 +1,6 @@
+Videocall aufzeichnen:
+- baue bitte ein Button für die Aufzeichnung vom Videocall ein.
+- lokal sollen alle Teilnehmer einzelne MP4 (ist ein anderes Format geeigneter?) Datein gespeichert werden. 
+    - So habe ich einzelne Tonspuren, welche ich pro Teilnehmer bei der Videoerstellung anpassen kann.
+    - hast du eine Idee, wie wir die Synchronisierung vereinfachen können?
+- der LiveKit Server soll sicherheitshalber auch eine Aufnahme erstellen. Dort reicht es, wenn alle VideoStreams in eine Datei geschrieben werden.

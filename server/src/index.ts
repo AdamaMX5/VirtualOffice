@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import http from 'http';
 import path from 'path';
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -7,6 +8,7 @@ import { AccessToken, EgressClient, EncodedFileOutput, EncodedFileType } from 'l
 
 import { config } from './config';
 import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxies/authProxy';
+import { attachPresenceWs } from './presenceWs';
 import { startReceptionBot } from './presence';
 
 const app = express();
@@ -117,7 +119,7 @@ app.post('/api/livekit/egress/stop', async (req, res) => {
 // ── Client Config ─────────────────────────────────────────────
 
 app.get('/api/config', (_req, res) => {
-  res.json({ presenceWsUrl: config.PRESENCE_WS_URL });
+  res.json({ ok: true });
 });
 
 // ── Static Client Build ───────────────────────────────────────
@@ -128,12 +130,12 @@ app.get('*path', (_req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 
-// ── Reception-Bot (verbindet sich als Client zum PresenceService) ──
+// ── HTTP + WebSocket-Server ───────────────────────────────────
 
-startReceptionBot();
+const server = http.createServer(app);
+attachPresenceWs(server);
 
-// ── HTTP-Server ───────────────────────────────────────────────
-
-app.listen(config.PORT, () => {
+server.listen(config.PORT, () => {
   console.log(`Server läuft auf http://localhost:${config.PORT}`);
+  startReceptionBot();
 });
