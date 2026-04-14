@@ -31,13 +31,14 @@ export interface ObjectDoc {
   isPublic?: boolean;
 }
 
-async function objFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const jwt = getJwt();
+/** Fetch mit optionalem JWT — für Reads genügt es wenn vorhanden, für Writes ist es Pflicht. */
+async function objFetch<T>(path: string, options: RequestInit = {}, jwt?: string | null): Promise<T> {
+  const authHeaders: Record<string, string> = jwt ? { Authorization: `Bearer ${jwt}` } : {};
   const res = await fetch(`${OBJECT_URL}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${jwt}`,
+      ...authHeaders,
       ...(options.headers as Record<string, string> | undefined),
     },
   });
@@ -46,12 +47,14 @@ async function objFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   return data as T;
 }
 
+/** Liest Objekte — funktioniert auch ohne JWT (public reads). */
 export async function listObjects(
   collection: string,
   params?: Record<string, string>,
 ): Promise<ObjectDoc[]> {
+  const jwt = useAuthStore.getState().jwt; // optional
   const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-  const result = await objFetch<unknown>(`/objects/${collection}${qs}`);
+  const result = await objFetch<unknown>(`/objects/${collection}${qs}`, {}, jwt);
   if (Array.isArray(result)) return result as ObjectDoc[];
   const r = result as Record<string, unknown>;
   if (Array.isArray(r.items)) return r.items as ObjectDoc[];
@@ -66,10 +69,11 @@ export async function createObject(
   app = 'VirtualOffice',
   isPublic = true,
 ): Promise<ObjectDoc> {
+  const jwt = getJwt();
   return objFetch<ObjectDoc>(`/objects/${collection}`, {
     method: 'POST',
     body: JSON.stringify({ data, refs, app, isPublic }),
-  });
+  }, jwt);
 }
 
 export async function patchObject(
@@ -78,14 +82,16 @@ export async function patchObject(
   data?: Record<string, unknown>,
   refs?: Record<string, string>,
 ): Promise<ObjectDoc> {
+  const jwt = getJwt();
   return objFetch<ObjectDoc>(`/objects/${collection}/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ data, refs, merge: true }),
-  });
+  }, jwt);
 }
 
 export async function deleteObject(collection: string, id: string): Promise<void> {
-  await objFetch<unknown>(`/objects/${collection}/${id}`, { method: 'DELETE' });
+  const jwt = getJwt();
+  await objFetch<unknown>(`/objects/${collection}/${id}`, { method: 'DELETE' }, jwt);
 }
 
 // ── MediaService ──────────────────────────────────────────────────────────────
