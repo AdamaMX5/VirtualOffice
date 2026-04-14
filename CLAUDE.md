@@ -18,7 +18,7 @@ Virtueller Büro-Raum: Teilnehmer bewegen sich als Avatare auf einer Kachelkarte
 | Service | Wozu |
 |---|---|
 | **AuthService** | Login/Register/Refresh — wird vom Express-Server proxied (`/api/auth/*`) |
-| **PresenceService** | WebSocket für Echtzeit-Positionen aller Nutzer — wird direkt vom Client via `usePresence` konsumiert |
+| **Presence (integriert)** | WebSocket-Server direkt im Express-Server auf `/ws` — `server/src/presenceWs.ts` |
 | **LiveKit** | Video/Audio-Räume — Token-Ausgabe über `/api/livekit/token`, Egress über `/api/livekit/egress/*` |
 
 ObjectService und MediaService sind integriert (Möbelkatalog). ProfileService, ExceptionService sind **noch nicht integriert**.
