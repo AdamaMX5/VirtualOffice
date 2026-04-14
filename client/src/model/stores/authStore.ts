@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { AuthStatus } from '../types';
 
 interface AuthState {
@@ -14,15 +15,27 @@ interface AuthState {
   clearAuth: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  jwt: null,
-  email: '',
-  authStatus: 'disconnected',
-  showModal: true,
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      jwt: null,
+      email: '',
+      authStatus: 'disconnected',
+      showModal: false, // wird nach Hydration neu gesetzt wenn kein JWT
 
-  setJwt: (token, email) => set({ jwt: token, email: email || undefined as unknown as string }),
-  setStatus: (authStatus) => set({ authStatus }),
-  openModal: () => set({ showModal: true }),
-  closeModal: () => set({ showModal: false }),
-  clearAuth: () => set({ jwt: null, email: '', authStatus: 'disconnected', showModal: true }),
-}));
+      setJwt: (token, email) => set({ jwt: token, email, showModal: false }),
+      setStatus: (authStatus) => set({ authStatus }),
+      openModal: () => set({ showModal: true }),
+      closeModal: () => set({ showModal: false }),
+      clearAuth: () => set({ jwt: null, email: '', authStatus: 'disconnected', showModal: true }),
+    }),
+    {
+      name: 'vo_auth',          // localStorage-Key
+      partialize: (s) => ({ jwt: s.jwt, email: s.email }), // nur JWT + Email persistieren
+      onRehydrateStorage: () => (state) => {
+        // Modal nur öffnen wenn nach Hydration kein JWT vorhanden
+        if (state && !state.jwt) state.showModal = true;
+      },
+    },
+  ),
+);

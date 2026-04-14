@@ -21,7 +21,7 @@ Virtueller Büro-Raum: Teilnehmer bewegen sich als Avatare auf einer Kachelkarte
 | **PresenceService** | WebSocket für Echtzeit-Positionen aller Nutzer — wird direkt vom Client via `usePresence` konsumiert |
 | **LiveKit** | Video/Audio-Räume — Token-Ausgabe über `/api/livekit/token`, Egress über `/api/livekit/egress/*` |
 
-ProfileService, ExceptionService, ObjectService, MediaService sind **noch nicht integriert**.
+ObjectService und MediaService sind integriert (Möbelkatalog). ProfileService, ExceptionService sind **noch nicht integriert**.
 
 ## Server — Env-Variablen
 
@@ -43,6 +43,34 @@ ProfileService, ExceptionService, ObjectService, MediaService sind **noch nicht 
 - **LiveKit Room**: Singleton auf Modul-Ebene in `useLiveKit.ts` — kein React-State, kein Re-Render bei Room-Events. Zugriff über `getRoom()`
 - **Video-Aufnahme**: Offscreen-Canvas (1920×1080) compositet alle Kamera-Tracks frame-genau, kein Screen-Capture. Kacheln sind immer 16:9 (`tileH = tileW * 9/16`)
 - **VITE_LIVEKIT_FORCE_TURN**: `true` → erzwingt TURN-Relay (für restriktive Netzwerke)
+
+## Auth-Standard — PFLICHT für alle neuen Features
+
+Der JWT wird in `useAuthStore` (Zustand + `persist`-Middleware) gehalten und im `localStorage` unter dem Key `vo_auth` gespeichert.
+
+### Einheitliche Prüfmuster
+
+| Kontext | Muster | Datei |
+|---|---|---|
+| React-Komponente (UI-Gate) | `const jwt = useAuthStore((s) => s.jwt);` / `const isAuth = jwt !== null;` | beliebig |
+| Service / Hook (außerhalb React-Tree) | `useAuthStore.getState().jwt` | `objectClient.ts`, `messageClient.ts` |
+
+**Regel**: Niemals `authStatus === 'connected_auth'` für UI-Gates verwenden — dieser Status hängt vom WebSocket ab und ist unabhängig vom Login-Status. Nur `jwt !== null` ist maßgeblich.
+
+### Beispiel — Button sichtbar nur wenn eingeloggt
+```tsx
+const jwt = useAuthStore((s) => s.jwt);
+if (!jwt) return null;
+```
+
+### Beispiel — Service-Funktion mit Auth
+```ts
+function requireJwt(): string {
+  const jwt = useAuthStore.getState().jwt; // persist garantiert Konsistenz
+  if (!jwt) throw new Error('Nicht eingeloggt');
+  return jwt;
+}
+```
 
 ## Client — wichtige Konstanten
 
