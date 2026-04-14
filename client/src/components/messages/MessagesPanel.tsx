@@ -247,6 +247,7 @@ const ChatView: React.FC<{ userId: string; name: string; isOnline: boolean }> = 
           ➤
         </button>
       </div>
+      </div>
     </div>
   );
 };
@@ -327,7 +328,7 @@ const MessagesPanel: React.FC<Props> = ({ onClose }) => {
                 background: conv.isOnline ? '#86efac' : 'rgba(255,255,255,0.2)',
               }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: conv.unread > 0 ? 700 : 400, fontSize: 13, truncate: 'ellipsis' as never }}>
+                <div style={{ fontWeight: conv.unread > 0 ? 700 : 400, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {conv.name}
                 </div>
                 {conv.lastBody && (
