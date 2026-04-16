@@ -12,6 +12,7 @@ interface SmileyAvatarProps {
   animate?: boolean;  // true für Remote-User (Konva-Tween)
   videoElement?: HTMLVideoElement | null;
   chatText?: string;  // aktuelle Sprechblasen-Nachricht
+  onClick?: () => void;
   // Drag-to-Move (nur lokaler Spieler)
   draggable?: boolean;
   onDragStart?: () => void;
@@ -19,7 +20,7 @@ interface SmileyAvatarProps {
   onDragEnd?:  (e: Konva.KonvaEventObject<DragEvent>) => void;
 }
 
-const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false, videoElement, chatText, draggable, onDragStart, onDragMove, onDragEnd }: SmileyAvatarProps) => {
+const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false, videoElement, chatText, onClick, draggable, onDragStart, onDragMove, onDragEnd }: SmileyAvatarProps) => {
   const groupRef = useRef<Konva.Group>(null);
 
   // Smooth-Interpolation für Remote-User per Konva-Tween
@@ -39,8 +40,9 @@ const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, 
       draggable={draggable}
       onDragMove={onDragMove}
       onDragEnd={onDragEnd}
-      onMouseEnter={draggable ? () => { document.body.style.cursor = 'grab'; } : undefined}
-      onMouseLeave={draggable ? () => { document.body.style.cursor = 'default'; } : undefined}
+      onClick={onClick}
+      onMouseEnter={() => { document.body.style.cursor = onClick ? 'pointer' : draggable ? 'grab' : 'default'; }}
+      onMouseLeave={() => { document.body.style.cursor = 'default'; }}
       onDragStart={draggable ? () => { document.body.style.cursor = 'grabbing'; onDragStart?.(); } : undefined}
     >
       {/* Schatten */}

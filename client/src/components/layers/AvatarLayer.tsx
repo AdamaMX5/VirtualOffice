@@ -5,6 +5,7 @@ import { usePlayerStore } from '../../model/stores/playerStore';
 import { usePresenceStore } from '../../model/stores/presenceStore';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useCameraStore } from '../../model/stores/cameraStore';
+import { useServiceStatusStore } from '../../model/stores/serviceStatusStore';
 import { P } from '../../model/constants';
 import SmileyAvatar from '../avatars/SmileyAvatar';
 
@@ -16,6 +17,7 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
   const { wx, wy, name } = usePlayerStore();
   const remoteUsers  = usePresenceStore((s) => s.remoteUsers);
   const chatBubbles  = usePresenceStore((s) => s.chatBubbles);
+  const openServiceStatus = useServiceStatusStore((s) => s.open);
   // trackVersion als Re-Render-Trigger wenn Video-Tracks sich ändern
   useLiveKitStore((s) => s.trackVersion);
 
@@ -66,6 +68,7 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
             isBot={isBot}
             animate={!isBot}
             chatText={chatBubbles[user.user_id]}
+            onClick={user.user_id === 'bot_admin' ? openServiceStatus : undefined}
           />
         );
       })}

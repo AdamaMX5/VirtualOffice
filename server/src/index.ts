@@ -9,7 +9,7 @@ import { AccessToken, EgressClient, EncodedFileOutput, EncodedFileType } from 'l
 import { config } from './config';
 import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxies/authProxy';
 import { attachPresenceWs } from './presenceWs';
-import { startReceptionBot } from './presence';
+import { startReceptionBot, startAdminBot } from './presence';
 
 const app = express();
 
@@ -138,4 +138,5 @@ attachPresenceWs(server);
 server.listen(config.PORT, () => {
   console.log(`Server läuft auf http://localhost:${config.PORT}`);
   startReceptionBot();
+  startAdminBot();
 });

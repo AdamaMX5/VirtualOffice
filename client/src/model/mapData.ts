@@ -4,11 +4,12 @@ import type { Room, Wall } from './types';
 const ROOM_FILL = '#585858';
 
 export const ROOMS: Room[] = [
-  { label: 'Eingangshalle', fill: ROOM_FILL, pts: [47,48,73,48,73,62,47,62] },
-  { label: 'Flur',          fill: ROOM_FILL, pts: [47,62,73,62,73,68,47,68] },
-  { label: 'Büro A',        fill: ROOM_FILL, pts: [35,40,47,40,47,62,35,62] },
-  { label: 'Büro B',        fill: ROOM_FILL, pts: [73,40,85,40,85,62,73,62] },
-  { label: 'Meetingraum',   fill: ROOM_FILL, pts: [35,68,85,68,85,80,35,80] },
+  { label: 'Eingangshalle', fill: ROOM_FILL,   pts: [47,48,73,48,73,62,47,62] },
+  { label: 'Flur',          fill: ROOM_FILL,   pts: [47,62,73,62,73,68,47,68] },
+  { label: 'Büro A',        fill: ROOM_FILL,   pts: [35,40,47,40,47,62,35,62] },
+  { label: 'Büro B',        fill: ROOM_FILL,   pts: [73,40,85,40,85,62,73,62] },
+  { label: 'Meetingraum',   fill: ROOM_FILL,   pts: [35,68,85,68,85,80,35,80] },
+  { label: 'Serverraum',    fill: '#1a2744',   pts: [88,44,103,44,103,62,88,62] },
 ];
 
 export const WALLS: Wall[] = [
@@ -35,6 +36,13 @@ export const WALLS: Wall[] = [
   { f:[85,80], t:[35,80], type:'wall' },
   { f:[35,80], t:[35,68], type:'wall' },
   { f:[58,68], t:[62,68], type:'door' },
+  // Serverraum
+  { f:[88,44], t:[103,44], type:'wall' },
+  { f:[103,44], t:[103,62], type:'wall' },
+  { f:[103,62], t:[88,62],  type:'wall' },
+  { f:[88,62],  t:[88,54],  type:'wall' },
+  { f:[88,54],  t:[88,50],  type:'door' },
+  { f:[88,50],  t:[88,44],  type:'wall' },
 ];
 
 /** Gibt den Raum-Label zurück, in dem sich Position (wx, wy) befindet, sonst null. */

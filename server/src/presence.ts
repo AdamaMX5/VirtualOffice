@@ -5,6 +5,10 @@ const BOT_X      = 55;
 const BOT_Y      = 57;
 const BOT_RADIUS = 3;
 
+const ADMIN_X      = 95;
+const ADMIN_Y      = 53;
+const ADMIN_RADIUS = 4;
+
 function randomWander(center: number, radius: number): number {
   return Math.round((center + (Math.random() * 2 - 1) * radius) * 10) / 10;
 }
@@ -55,4 +59,46 @@ export function startReceptionBot(): void {
 
   // Kurze Verzögerung damit der HTTP-Server zuerst startet
   setTimeout(connect, 500);
+}
+
+export function startAdminBot(): void {
+  let ws: WebSocket | null = null;
+  let moveTimer:      ReturnType<typeof setInterval> | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout>  | null = null;
+  let reconnectDelay = 2_000;
+
+  function send(msg: object) {
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  }
+
+  function startWandering() {
+    if (moveTimer) clearInterval(moveTimer);
+    moveTimer = setInterval(() => {
+      send({ type: 'move', x: randomWander(ADMIN_X, ADMIN_RADIUS), y: randomWander(ADMIN_Y, ADMIN_RADIUS) });
+    }, 12_000);
+  }
+
+  function connect() {
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    const wsUrl = `ws://localhost:${config.PORT}/ws?bot_id=bot_admin`;
+    ws = new WebSocket(wsUrl);
+
+    ws.on('open', () => {
+      reconnectDelay = 2_000;
+      send({ type: 'set_name', name: 'Admin', department: 'bot' });
+      send({ type: 'move', x: ADMIN_X, y: ADMIN_Y });
+      startWandering();
+    });
+
+    ws.on('close', () => {
+      if (moveTimer) { clearInterval(moveTimer); moveTimer = null; }
+      reconnectTimer = setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+    });
+
+    ws.on('error', (err) => console.warn('[AdminBot] WS-Fehler:', err.message));
+    ws.on('message', () => { /* noop */ });
+  }
+
+  setTimeout(connect, 700);
 }
