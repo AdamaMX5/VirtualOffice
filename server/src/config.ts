@@ -5,4 +5,5 @@ export const config = {
   LIVEKIT_URL:       process.env.LIVEKIT_URL        ?? 'https://live.freischule.info',
   LIVEKIT_API_KEY:   process.env.LIVEKIT_API_KEY    ?? 'devkey',
   LIVEKIT_API_SECRET: process.env.LIVEKIT_API_SECRET ?? 'devsecret',
+  REDIS_URL:         process.env.REDIS_URL          ?? 'redis://localhost:6379',
 } as const;

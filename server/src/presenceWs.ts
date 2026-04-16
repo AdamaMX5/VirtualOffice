@@ -1,8 +1,9 @@
 /**
- * presenceWs – integrierter Presence-WebSocket-Server.
+ * presenceWs – integrierter Presence-WebSocket-Server mit Redis-Backend.
  *
- * Ersetzt den externen PresenceService vollständig.
- * Wird an den HTTP-Server angehängt (kein eigener Port).
+ * Redis-Layout:
+ *   vo:{room}:events          → Pub/Sub-Channel für alle Presence-Events
+ *   vo:{room}:users:{userId}  → Hash { name, department, x, y }, TTL 120 s
  *
  * Eingehende Nachrichten (Client → Server):
  *   set_name      { name, department? }
@@ -23,6 +24,16 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import type { IncomingMessage } from 'http';
+import { redisPub, redisSub } from './redis';
+
+// ── Konstanten ────────────────────────────────────────────────────────────────
+
+const ROOM     = 'main';
+const CHANNEL  = `vo:${ROOM}:events`;
+const userKey  = (id: string) => `vo:${ROOM}:users:${id}`;
+const USER_TTL = 120; // Sekunden — wird bei jedem move/set_name erneuert
+
+// ── Typen ─────────────────────────────────────────────────────────────────────
 
 interface UserInfo {
   ws:          WebSocket;
@@ -33,23 +44,74 @@ interface UserInfo {
   y:           number;
 }
 
-const users = new Map<WebSocket, UserInfo>();
+// Nur lokale WS-Verbindungen dieser Instanz
+const connections = new Map<WebSocket, UserInfo>();
 let guestCounter = 0;
 
-// ── Hilfsfunktionen ───────────────────────────────────────────────────────────
+// ── Redis-Helpers ─────────────────────────────────────────────────────────────
 
-function send(ws: WebSocket, msg: object) {
+async function saveUserState(u: UserInfo): Promise<void> {
+  const key = userKey(u.user_id);
+  await redisPub.hset(key, {
+    name:       u.name,
+    department: u.department ?? '',
+    x:          u.x,
+    y:          u.y,
+  });
+  await redisPub.expire(key, USER_TTL);
+}
+
+async function removeUserState(userId: string): Promise<void> {
+  await redisPub.del(userKey(userId));
+}
+
+/** Liest alle User-Snapshots aus Redis (inkl. User auf anderen Instanzen). */
+async function getSnapshot(excludeId?: string): Promise<Array<{
+  user_id: string; name: string; department?: string; x: number; y: number;
+}>> {
+  const prefix = `vo:${ROOM}:users:`;
+  const keys: string[] = [];
+  let cursor = '0';
+  do {
+    const [next, batch] = await redisPub.scan(cursor, 'MATCH', `${prefix}*`, 'COUNT', 100);
+    cursor = next;
+    keys.push(...batch);
+  } while (cursor !== '0');
+
+  const result = [];
+  for (const key of keys) {
+    const userId = key.slice(prefix.length);
+    if (userId === excludeId) continue;
+    const d = await redisPub.hgetall(key);
+    if (!d?.name) continue;
+    result.push({
+      user_id:    userId,
+      name:       d.name,
+      department: d.department || undefined,
+      x:          Number(d.x ?? 60),
+      y:          Number(d.y ?? 45),
+    });
+  }
+  return result;
+}
+
+async function publishEvent(event: object): Promise<void> {
+  await redisPub.publish(CHANNEL, JSON.stringify(event));
+}
+
+// ── WS-Helpers ────────────────────────────────────────────────────────────────
+
+function sendTo(ws: WebSocket, msg: object): void {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
 }
 
-function broadcast(msg: object, exclude?: WebSocket) {
+function broadcastLocal(msg: object, exclude?: WebSocket): void {
   const json = JSON.stringify(msg);
-  for (const ws of users.keys()) {
+  for (const ws of connections.keys()) {
     if (ws !== exclude && ws.readyState === WebSocket.OPEN) ws.send(json);
   }
 }
 
-/** JWT-Payload ohne Signaturprüfung lesen (Vertrauen: AuthService hat Token bereits validiert). */
 function decodeJwtPayload(token: string): { sub?: string } | null {
   try {
     const part = token.split('.')[1];
@@ -68,39 +130,69 @@ function resolveUserId(token?: string | null): string {
   return `g_${++guestCounter}`;
 }
 
+// ── Redis-Subscriber ──────────────────────────────────────────────────────────
+// Alle Instanzen empfangen jeden Event und senden ihn an ihre lokalen WS-Clients.
+
+redisSub.subscribe(CHANNEL, (err) => {
+  if (err) console.error('[Presence] Redis-Subscribe Fehler:', err.message);
+  else     console.log(`[Presence] Subscribed auf ${CHANNEL}`);
+});
+
+redisSub.on('message', (_ch: string, raw: string) => {
+  try {
+    const event = JSON.parse(raw) as Record<string, unknown>;
+
+    if (event.type === 'notify_user') {
+      // Gezielt: nur der Ziel-User auf dieser Instanz bekommt die Nachricht
+      const targetId = String(event.targetUserId ?? '');
+      for (const u of connections.values()) {
+        if (u.user_id === targetId) {
+          sendTo(u.ws, { type: 'new_message', senderId: event.senderId });
+          break;
+        }
+      }
+      return;
+    }
+
+    // Alle anderen Events → Broadcast an lokale WS-Clients
+    broadcastLocal(event);
+  } catch (err) {
+    console.warn('[Presence] Ungültiges Redis-Event:', err);
+  }
+});
+
 // ── WS-Server ─────────────────────────────────────────────────────────────────
 
 export function attachPresenceWs(server: Server): void {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
-  wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+  wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
     const url    = new URL(req.url ?? '', 'http://x');
     const token  = url.searchParams.get('token');
     const userId = resolveUserId(token);
 
     const user: UserInfo = { ws, user_id: userId, name: userId, x: 60, y: 45 };
-    users.set(ws, user);
+    connections.set(ws, user);
 
-    // Snapshot aller aktuellen User senden
-    const snapshot = [...users.values()]
-      .filter((u) => u.ws !== ws)
-      .map(({ user_id, name, department, x, y }) => ({ user_id, name, department, x, y }));
-    send(ws, { type: 'snapshot', users: snapshot });
+    // Snapshot aus Redis — enthält auch User von anderen Server-Instanzen
+    const snapshot = await getSnapshot(userId);
+    sendTo(ws, { type: 'snapshot', users: snapshot });
 
-    // Allen anderen: user_joined melden
-    broadcast({
+    // User in Redis registrieren und allen anderen melden
+    await saveUserState(user);
+    await publishEvent({
       type: 'user_joined',
       user_id: user.user_id,
       name:    user.name,
       x:       user.x,
       y:       user.y,
-    }, ws);
+    });
 
     // ── Eingehende Nachrichten ─────────────────────────────────────────────
-    ws.on('message', (data) => {
+    ws.on('message', async (data) => {
       try {
         const msg = JSON.parse(data.toString()) as Record<string, unknown>;
-        const u = users.get(ws);
+        const u = connections.get(ws);
         if (!u) return;
 
         switch (msg.type) {
@@ -108,21 +200,22 @@ export function attachPresenceWs(server: Server): void {
           case 'set_name':
             u.name       = String(msg.name       ?? u.name);
             u.department = msg.department ? String(msg.department) : undefined;
-            // Allen anderen: Updated-Join melden (damit Name in Snapshot korrekt ist)
-            broadcast({
-              type: 'user_joined',
+            await saveUserState(u);
+            await publishEvent({
+              type:       'user_joined', // überschreibt alten Eintrag im Client-State
               user_id:    u.user_id,
               name:       u.name,
               department: u.department,
               x:          u.x,
               y:          u.y,
-            }, ws);
+            });
             break;
 
           case 'move':
             u.x = Number(msg.x ?? u.x);
             u.y = Number(msg.y ?? u.y);
-            broadcast({ type: 'user_moved', user_id: u.user_id, x: u.x, y: u.y }, ws);
+            await saveUserState(u);
+            await publishEvent({ type: 'user_moved', user_id: u.user_id, x: u.x, y: u.y });
             break;
 
           case 'refresh_token':
@@ -134,18 +227,13 @@ export function attachPresenceWs(server: Server): void {
 
           case 'notify_user': {
             const targetId = String(msg.targetUserId ?? '');
-            for (const tu of users.values()) {
-              if (tu.user_id === targetId) {
-                send(tu.ws, { type: 'new_message', senderId: u.user_id });
-                break;
-              }
-            }
+            await publishEvent({ type: 'notify_user', targetUserId: targetId, senderId: u.user_id });
             break;
           }
 
           case 'chat': {
             const text = String(msg.text ?? '').slice(0, 500);
-            if (text) broadcast({ type: 'chat', userId: u.user_id, text });
+            if (text) await publishEvent({ type: 'chat', userId: u.user_id, text });
             break;
           }
         }
@@ -154,10 +242,13 @@ export function attachPresenceWs(server: Server): void {
       }
     });
 
-    ws.on('close', () => {
-      const u = users.get(ws);
-      users.delete(ws);
-      if (u) broadcast({ type: 'user_left', user_id: u.user_id });
+    ws.on('close', async () => {
+      const u = connections.get(ws);
+      connections.delete(ws);
+      if (u) {
+        await removeUserState(u.user_id);
+        await publishEvent({ type: 'user_left', user_id: u.user_id });
+      }
     });
 
     ws.on('error', (err) => console.warn('[Presence] WS-Fehler:', err.message));
@@ -166,7 +257,7 @@ export function attachPresenceWs(server: Server): void {
   console.log('[Presence] WebSocket-Server aktiv auf /ws');
 }
 
-/** Gibt alle aktuell verbundenen User zurück (für den Reception-Bot). */
+/** Gibt alle lokal verbundenen User zurück (für den Reception-Bot). */
 export function getConnectedUsers(): UserInfo[] {
-  return [...users.values()];
+  return [...connections.values()];
 }

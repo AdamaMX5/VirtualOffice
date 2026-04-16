@@ -3,10 +3,9 @@ import { OBJECT_URL, MEDIA_URL } from '../model/constants';
 
 // ── JWT helpers ───────────────────────────────────────────────────────────────
 
-function getJwt(): string {
-  const jwt = useAuthStore.getState().jwt;
-  if (!jwt) throw new Error('Nicht eingeloggt');
-  return jwt;
+/** JWT aus dem Store – nie werfen, damit Requests auch ohne Login abgehen. */
+function getJwt(): string | null {
+  return useAuthStore.getState().jwt;
 }
 
 /** Liest die User-ID (sub-Claim) aus dem JWT, ohne Signaturprüfung. */
@@ -111,9 +110,12 @@ export async function uploadMedia(
   if (name)        form.append('name', name);
   if (description) form.append('description', description);
 
+  const headers: Record<string, string> = {};
+  if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
+
   const res = await fetch(`${MEDIA_URL}/upload`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${jwt}` },
+    headers,
     body: form,
   });
   const data = await res.json() as Record<string, unknown>;
