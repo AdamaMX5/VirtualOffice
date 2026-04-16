@@ -30,7 +30,7 @@ export function startReceptionBot(): void {
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 
     // Bot verbindet sich zum eigenen lokalen WS-Server
-    const wsUrl = `ws://localhost:${config.PORT}/ws`;
+    const wsUrl = `ws://localhost:${config.PORT}/ws?bot_id=bot_empfang`;
     console.log(`[Bot] Verbinde zu lokalem Presence-Server ${wsUrl} …`);
     ws = new WebSocket(wsUrl);
 

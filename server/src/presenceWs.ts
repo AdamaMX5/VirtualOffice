@@ -105,10 +105,11 @@ function sendTo(ws: WebSocket, msg: object): void {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
 }
 
-function broadcastLocal(msg: object, exclude?: WebSocket): void {
+function broadcastLocal(msg: object, excludeUserId?: string): void {
   const json = JSON.stringify(msg);
-  for (const ws of connections.keys()) {
-    if (ws !== exclude && ws.readyState === WebSocket.OPEN) ws.send(json);
+  for (const [ws, u] of connections) {
+    if (excludeUserId && u.user_id === excludeUserId) continue;
+    if (ws.readyState === WebSocket.OPEN) ws.send(json);
   }
 }
 
@@ -122,7 +123,8 @@ function decodeJwtPayload(token: string): { sub?: string } | null {
   }
 }
 
-function resolveUserId(token?: string | null): string {
+function resolveUserId(token?: string | null, botId?: string | null, isLocalhost = false): string {
+  if (isLocalhost && botId) return botId;
   if (token) {
     const payload = decodeJwtPayload(token);
     if (payload?.sub) return payload.sub;
@@ -154,8 +156,10 @@ redisSub.on('message', (_ch: string, raw: string) => {
       return;
     }
 
-    // Alle anderen Events → Broadcast an lokale WS-Clients
-    broadcastLocal(event);
+    // Alle anderen Events → Broadcast an lokale WS-Clients.
+    // user_id im Event = Absender → nicht zurückschicken (kein Echo).
+    const excludeId = typeof event.user_id === 'string' ? event.user_id : undefined;
+    broadcastLocal(event, excludeId);
   } catch (err) {
     console.warn('[Presence] Ungültiges Redis-Event:', err);
   }
@@ -169,7 +173,10 @@ export function attachPresenceWs(server: Server): void {
   wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
     const url    = new URL(req.url ?? '', 'http://x');
     const token  = url.searchParams.get('token');
-    const userId = resolveUserId(token);
+    const botId  = url.searchParams.get('bot_id');
+    const remote = req.socket.remoteAddress ?? '';
+    const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+    const userId = resolveUserId(token, botId, isLocal);
 
     const user: UserInfo = { ws, user_id: userId, name: userId, x: 60, y: 45 };
     connections.set(ws, user);
