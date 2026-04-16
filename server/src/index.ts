@@ -122,6 +122,18 @@ app.get('/api/config', (_req, res) => {
   res.json({ ok: true });
 });
 
+// ── Service Status (Proxy → AdminClient /health) ─────────────
+
+app.get('/api/services/status', async (_req, res) => {
+  try {
+    const r = await fetch(`${config.ADMIN_URL}/health`);
+    const data = await r.json();
+    res.status(r.status).json(data);
+  } catch (err) {
+    res.status(502).json({ error: `AdminClient nicht erreichbar: ${String(err)}` });
+  }
+});
+
 // ── Static Client Build ───────────────────────────────────────
 
 const clientDist = path.join(__dirname, '../../client/dist');

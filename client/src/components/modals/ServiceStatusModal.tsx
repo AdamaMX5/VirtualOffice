@@ -1,29 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { useServiceStatusStore } from '../../model/stores/serviceStatusStore';
 
+// Response-Format: GET https://admin.freischule.info/health
 interface ServiceStatus {
-  name:     string;
-  status:   'ok' | 'degraded' | 'error' | 'unknown';
+  key:      string;
+  label:    string;
+  url:      string | null;
+  status:   'ok' | 'error' | 'unconfigured';
+  code?:    number;
   latency?: number;
-  message?: string;
 }
 
 interface StatusResponse {
-  services: ServiceStatus[];
+  activeGroup: string;
+  services:    ServiceStatus[];
 }
 
 const STATUS_COLOR: Record<ServiceStatus['status'], string> = {
-  ok:       '#22c55e',
-  degraded: '#f59e0b',
-  error:    '#ef4444',
-  unknown:  '#64748b',
+  ok:           '#22c55e',
+  error:        '#ef4444',
+  unconfigured: '#64748b',
 };
 
 const STATUS_LABEL: Record<ServiceStatus['status'], string> = {
-  ok:       'OK',
-  degraded: 'DEGRADED',
-  error:    'ERROR',
-  unknown:  'UNKNOWN',
+  ok:           'OK',
+  error:        'ERROR',
+  unconfigured: 'N/A',
 };
 
 const S = {
@@ -218,17 +220,19 @@ const ServiceStatusModal: React.FC = () => {
 
         {!loading && data && (
           <>
+            {data.activeGroup && (
+              <p style={{ margin: 0, fontSize: 11, color: '#475569' }}>
+                Gruppe: <span style={{ color: '#94a3b8' }}>{data.activeGroup}</span>
+              </p>
+            )}
             <div style={S.table}>
               {data.services.map((svc) => (
-                <div key={svc.name} style={S.row}>
-                  <span style={S.serviceName}>{svc.name}</span>
+                <div key={svc.key} style={S.row}>
+                  <span style={S.serviceName}>{svc.label}</span>
                   <span style={S.latency}>
-                    {svc.latency != null ? `${svc.latency} ms` : '—'}
+                    {svc.latency != null ? `${svc.latency} ms` : svc.code != null ? `HTTP ${svc.code}` : '—'}
                   </span>
                   <span style={S.badge(svc.status)}>{STATUS_LABEL[svc.status]}</span>
-                  {svc.message && (
-                    <span style={S.message}>{svc.message}</span>
-                  )}
                 </div>
               ))}
             </div>
