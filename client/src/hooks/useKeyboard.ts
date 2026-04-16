@@ -8,8 +8,12 @@ export function useKeyboard(): React.RefObject<Set<string>> {
   const keys = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    const onDown = (e: KeyboardEvent) => keys.current.add(e.code);
-    const onUp   = (e: KeyboardEvent) => keys.current.delete(e.code);
+    const onDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      keys.current.add(e.code);
+    };
+    const onUp = (e: KeyboardEvent) => keys.current.delete(e.code);
 
     window.addEventListener('keydown', onDown);
     window.addEventListener('keyup',   onUp);

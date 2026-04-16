@@ -123,43 +123,60 @@ const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, 
         <Circle radius={21} stroke="#fde68a" strokeWidth={1.5} dash={[4, 3]} opacity={0.7} />
       )}
 
-      {/* Sprechblase */}
-      {chatText && (
-        <>
-          <Rect
-            x={-65} y={-58}
-            width={130} height={26}
-            fill="rgba(255,255,255,0.96)"
-            cornerRadius={8}
-            shadowColor="rgba(0,0,0,0.25)"
-            shadowBlur={6}
-            shadowOffsetY={2}
-          />
-          {/* Schweif-Dreieck */}
-          <Shape
-            sceneFunc={(ctx, shape) => {
-              ctx.beginPath();
-              ctx.moveTo(-7, -32);
-              ctx.lineTo(7, -32);
-              ctx.lineTo(0, -22);
-              ctx.closePath();
-              ctx.fillShape(shape);
-            }}
-            fill="rgba(255,255,255,0.96)"
-          />
-          <Text
-            text={chatText}
-            fontSize={11}
-            fontStyle="bold"
-            fill="#1e293b"
-            x={-57} y={-52}
-            width={114}
-            align="center"
-            wrap="none"
-            ellipsis
-          />
-        </>
-      )}
+      {/* Sprechblase – dynamische Größe je nach Textlänge */}
+      {chatText && (() => {
+        const len      = chatText.length;
+        const fontSize = len > 100 ? 9 : len > 55 ? 10 : 11;
+        const bW       = 160;
+        const padX     = 8;
+        const padY     = 6;
+        const innerW   = bW - padX * 2;
+        // Näherung: durchschnittliche Zeichenbreite ≈ fontSize * 0.58
+        const charsPerLine = Math.floor(innerW / (fontSize * 0.58));
+        const numLines     = Math.min(Math.ceil(len / charsPerLine), 5);
+        const lineH        = fontSize + 3;
+        const bH           = numLines * lineH + padY * 2;
+        const bX           = -bW / 2;
+        // Bubble-Boden bei y = -32, wächst nach oben
+        const bY = -32 - bH;
+
+        return (
+          <>
+            <Rect
+              x={bX} y={bY}
+              width={bW} height={bH}
+              fill="rgba(255,255,255,0.96)"
+              cornerRadius={8}
+              shadowColor="rgba(0,0,0,0.25)"
+              shadowBlur={6}
+              shadowOffsetY={2}
+            />
+            {/* Schweif-Dreieck */}
+            <Shape
+              sceneFunc={(ctx, shape) => {
+                ctx.beginPath();
+                ctx.moveTo(-7, -32);
+                ctx.lineTo(7, -32);
+                ctx.lineTo(0, -22);
+                ctx.closePath();
+                ctx.fillShape(shape);
+              }}
+              fill="rgba(255,255,255,0.96)"
+            />
+            <Text
+              text={chatText}
+              fontSize={fontSize}
+              fontStyle="bold"
+              fill="#1e293b"
+              x={bX + padX} y={bY + padY}
+              width={innerW}
+              height={numLines * lineH}
+              align="center"
+              wrap="word"
+            />
+          </>
+        );
+      })()}
 
       {/* Name-Label */}
       <Text

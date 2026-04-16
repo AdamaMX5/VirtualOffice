@@ -77,7 +77,7 @@ const ChatInput: React.FC = () => {
       onChange={(e) => setText(e.target.value)}
       onKeyDown={handleKeyDown}
       onBlur={close}
-      maxLength={120}
+      maxLength={200}
       placeholder="Nachricht… (Enter = senden)"
       style={{
         position: 'fixed',
