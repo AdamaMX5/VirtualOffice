@@ -7,7 +7,6 @@ import cors from 'cors';
 import { AccessToken, EgressClient, EncodedFileOutput, EncodedFileType } from 'livekit-server-sdk';
 
 import { config } from './config';
-import { connectRedis } from './redis';
 import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxies/authProxy';
 import { attachPresenceWs } from './presenceWs';
 import { startReceptionBot } from './presence';
@@ -136,12 +135,7 @@ app.get('*path', (_req, res) => {
 const server = http.createServer(app);
 attachPresenceWs(server);
 
-connectRedis().then(() => {
-  server.listen(config.PORT, () => {
-    console.log(`Server läuft auf http://localhost:${config.PORT}`);
-    startReceptionBot();
-  });
-}).catch((err) => {
-  console.error('[Redis] Verbindung fehlgeschlagen:', err.message);
-  process.exit(1);
+server.listen(config.PORT, () => {
+  console.log(`Server läuft auf http://localhost:${config.PORT}`);
+  startReceptionBot();
 });
