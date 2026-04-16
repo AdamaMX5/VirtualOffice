@@ -37,7 +37,7 @@ export function startReceptionBot(): void {
     ws.on('open', () => {
       reconnectDelay = 2_000;
       console.log('[Bot] Verbunden mit lokalem Presence-Server');
-      send({ type: 'set_name', name: 'Empfang_Bot', department: 'bot' });
+      send({ type: 'set_name', name: 'Empfang', department: 'bot' });
       send({ type: 'move', x: BOT_X, y: BOT_Y });
       startWandering();
     });
