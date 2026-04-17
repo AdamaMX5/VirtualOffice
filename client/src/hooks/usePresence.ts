@@ -45,6 +45,7 @@ export function usePresence() {
       ? `${WS_PATH}?token=${token}`
       : WS_PATH;
 
+    console.log('[WS] connecting →', wsUrl);
     const ws = new WebSocket(wsUrl);
     socketRef.current = ws;
 

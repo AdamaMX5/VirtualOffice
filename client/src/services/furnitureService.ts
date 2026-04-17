@@ -3,6 +3,7 @@
  * Alle Funktionen lesen/schreiben den furnitureStore direkt über getState().
  */
 import { useFurnitureStore, CatalogItem, PlacedItem } from '../model/stores/furnitureStore';
+import { usePlayerStore } from '../model/stores/playerStore';
 import {
   listObjects, createObject, patchObject, deleteObject, uploadMedia,
   getJwtUserId, ObjectDoc,
@@ -56,6 +57,7 @@ function toPlacedItem(doc: ObjectDoc): PlacedItem {
     catalogItemId: String(d.catalogItemId ?? ''),
     roomId:        d.roomId ? String(d.roomId) : undefined,
     ownerId:       doc.refs?.ownerId ?? String(d.ownerId ?? ''),
+    ownerName:     d.ownerName ? String(d.ownerName) : undefined,
   };
 }
 
@@ -91,6 +93,7 @@ export async function placeItem(
   roomId?: string,
 ): Promise<void> {
   const ownerId = getJwtUserId();
+  const ownerName = usePlayerStore.getState().name;
   const data: Record<string, unknown> = {
     x, y,
     width:         catalogItem.defaultWidth,
@@ -100,6 +103,7 @@ export async function placeItem(
     imageUrl:      catalogItem.imageUrl,
     catalogItemId: catalogItem.id,
     roomId:        roomId ?? null,
+    ownerName,
   };
   const refs: Record<string, string> = { ownerId };
   if (roomId) refs.roomId = roomId;

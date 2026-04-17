@@ -23,6 +23,7 @@ export interface PlacedItem {
   catalogItemId: string;
   roomId?: string;
   ownerId: string;
+  ownerName?: string;
 }
 
 interface FurnitureState {

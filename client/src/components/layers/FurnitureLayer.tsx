@@ -3,9 +3,14 @@ import { Layer, Image as KonvaImage, Transformer } from 'react-konva';
 import type KonvaType from 'konva';
 import { useFurnitureStore, PlacedItem } from '../../model/stores/furnitureStore';
 import { useAuthStore } from '../../model/stores/authStore';
+import { useDeskStore } from '../../model/stores/deskStore';
 import { getJwtUserId } from '../../services/objectClient';
 import { moveItem, resizeItem, rotateItem } from '../../services/furnitureService';
 import { P } from '../../model/constants';
+
+// Typen, die als Schreibtisch geöffnet werden können
+const DESK_TYPES = new Set(['desk', 'Schreibtisch', 'Arbeitsplatz', 'Arbeitsplätze']);
+const isDeskType = (type: string) => DESK_TYPES.has(type);
 
 // ── Bild-Cache (modul-weit, überlebt Re-Renders) ──────────────────────────────
 const imgCache = new Map<string, HTMLImageElement>();
@@ -32,11 +37,12 @@ interface TileProps {
   isSelected: boolean;
   canEdit: boolean;
   onSelect: () => void;
+  onOpenDesk: () => void;
   trRef: React.RefObject<KonvaType.Transformer | null>;
 }
 
 const FurnitureTile: React.FC<TileProps> = ({
-  item, image, furnitureModeActive, isSelected, canEdit, onSelect, trRef,
+  item, image, furnitureModeActive, isSelected, canEdit, onSelect, onOpenDesk, trRef,
 }) => {
   const imgRef = useRef<KonvaType.Image>(null);
 
@@ -84,8 +90,14 @@ const FurnitureTile: React.FC<TileProps> = ({
       offsetX={w / 2} offsetY={h / 2}
       rotation={item.rotation}
       draggable={furnitureModeActive && canEdit}
-      onClick={() => { if (furnitureModeActive && canEdit) onSelect(); }}
-      onTap={()   => { if (furnitureModeActive && canEdit) onSelect(); }}
+      onClick={() => {
+        if (furnitureModeActive && canEdit) { onSelect(); return; }
+        if (!furnitureModeActive && isDeskType(item.type)) onOpenDesk();
+      }}
+      onTap={() => {
+        if (furnitureModeActive && canEdit) { onSelect(); return; }
+        if (!furnitureModeActive && isDeskType(item.type)) onOpenDesk();
+      }}
       onDragEnd={handleDragEnd}
       onTransformEnd={handleTransformEnd}
     />
@@ -100,6 +112,7 @@ interface LayerProps {
 
 const FurnitureLayer: React.FC<LayerProps> = ({ x, y, scaleX, scaleY }) => {
   const { placedItems, furnitureModeActive, selectedId, selectItem } = useFurnitureStore();
+  const openDesk = useDeskStore((s) => s.openDesk);
   const authStatus = useAuthStore((s) => s.authStatus);
   const isAdmin    = useAuthStore((s) => {
     if (!s.jwt) return false;
@@ -145,6 +158,7 @@ const FurnitureLayer: React.FC<LayerProps> = ({ x, y, scaleX, scaleY }) => {
             isSelected={selectedId === item.id}
             canEdit={canEdit}
             onSelect={() => selectItem(item.id)}
+            onOpenDesk={() => openDesk(item.id, item.ownerId, item.ownerName ?? item.ownerId)}
             trRef={trRef}
           />
         );
