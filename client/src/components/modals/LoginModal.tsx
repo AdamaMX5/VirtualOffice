@@ -71,7 +71,7 @@ const LoginModal = () => {
   async function handleLogin() {
     setLoading(true); setError(''); setInfo('');
     try {
-      const data = await apiPost<LoginResponse>(`${AUTH_URL}/user/login`, {
+      const data = await apiPost<LoginResponse>('/api/auth/login', {
         email,
         password,
         deviceFingerprint: navigator.userAgent,

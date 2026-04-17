@@ -253,7 +253,7 @@ const FurniturePanel: React.FC<Props> = ({ onClose }) => {
   const { catalogItems, pendingCatalogItem, selectedId, placedItems,
           setPendingCatalogItem, selectItem } = useFurnitureStore();
   const jwt    = useAuthStore((s) => s.jwt);
-  const isAuth = jwt !== null;
+  const isAuth = !!jwt;
   const ownerId    = getJwtUserId();
 
   const [activeGroup,  setActiveGroup]  = useState<string>('Alle');
