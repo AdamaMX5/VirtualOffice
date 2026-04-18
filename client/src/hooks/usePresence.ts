@@ -122,9 +122,9 @@ export function usePresence() {
   // Verbindung aufbauen / neu aufbauen wenn jwt oder name sich ändert
   useEffect(() => {
     console.log('[WS] useEffect ausgelöst — name:', JSON.stringify(name), '| jwt vorhanden:', !!jwt);
-    // Nur verbinden wenn der User einen Namen hat
-    if (!name || name === '...') {
-      console.log('[WS] Verbindung blockiert — name noch nicht gesetzt ("...")', JSON.stringify(name));
+    // Gäste ohne Namen blockieren; Auth-User verbinden immer (Name kommt vom JWT)
+    if (!jwt && (!name || name === '...')) {
+      console.log('[WS] Verbindung blockiert — Gast ohne Namen');
       return;
     }
 
