@@ -45,14 +45,14 @@ export function usePresence() {
       ? `${WS_PATH}?token=${token}`
       : WS_PATH;
 
-    console.log('[WS] connecting →', wsUrl);
+    console.log('[WS] connect() aufgerufen → url:', wsUrl, '| name:', nameRef.current, '| jwt vorhanden:', !!token);
     const ws = new WebSocket(wsUrl);
     socketRef.current = ws;
 
     ws.onopen = () => {
       reconnectDelay.current = 1000;
       setWsStatus('connected');
-      console.log('[WS] connected', wsUrl);
+      console.log('[WS] onopen — verbunden mit', wsUrl);
 
       if (!token) {
         // Gast: Namen senden
@@ -116,13 +116,17 @@ export function usePresence() {
       reconnectDelay.current = Math.min(delay * 2, MAX_DELAY);
     };
 
-    ws.onerror = (ev) => console.warn('[WS] error', ev);
+    ws.onerror = (ev) => console.warn('[WS] onerror — readyState:', ws.readyState, ev);
   }, [setStatus, setWsStatus, applySnapshot, addOrUpdateUser, moveUser, removeUser, resetUsers, setReconnectDelay]);
 
   // Verbindung aufbauen / neu aufbauen wenn jwt oder name sich ändert
   useEffect(() => {
+    console.log('[WS] useEffect ausgelöst — name:', JSON.stringify(name), '| jwt vorhanden:', !!jwt);
     // Nur verbinden wenn der User einen Namen hat
-    if (!name || name === '...') return;
+    if (!name || name === '...') {
+      console.log('[WS] Verbindung blockiert — name noch nicht gesetzt ("...")', JSON.stringify(name));
+      return;
+    }
 
     // Alte Verbindung schließen — socketRef wird gleich überschrieben,
     // onclose ignoriert den alten Socket wegen socketRef.current !== ws

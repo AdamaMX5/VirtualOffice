@@ -33,6 +33,7 @@ export const useAuthStore = create<AuthState>()(
       name: 'vo_auth',          // localStorage-Key
       partialize: (s) => ({ jwt: s.jwt, email: s.email }), // nur JWT + Email persistieren
       onRehydrateStorage: () => (rehydrated) => {
+        console.log('[Auth] Hydration abgeschlossen — jwt vorhanden:', !!(rehydrated?.jwt), '| email:', rehydrated?.email);
         // Modal nur öffnen wenn nach Hydration kein JWT vorhanden.
         // setState() aufrufen statt direkte Mutation, damit React-Subscriptions
         // benachrichtigt werden und ein Re-Render stattfindet.

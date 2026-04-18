@@ -176,6 +176,13 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
         </button>
       )}
     </div>
+    <div style={{
+      position: 'fixed', bottom: 8, right: 12,
+      color: 'rgba(255,255,255,0.25)', fontSize: 10,
+      fontFamily: 'monospace', pointerEvents: 'none', zIndex: 100,
+    }}>
+      v{__APP_VERSION__}
+    </div>
   );
 };
 

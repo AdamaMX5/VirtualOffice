@@ -27,6 +27,9 @@ export const usePlayerStore = create<PlayerState>()(
     {
       name: 'vo_player',
       partialize: (s) => ({ name: s.name }), // nur Name persistieren
+      onRehydrateStorage: () => (rehydrated) => {
+        console.log('[Player] Hydration abgeschlossen — name:', JSON.stringify(rehydrated?.name));
+      },
     },
   ),
 );
