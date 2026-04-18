@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '../model/stores/authStore';
 import { apiPost } from '../services/apiClient';
+import { AUTH_URL } from '../model/constants';
 
 interface UseTokenRefreshOptions {
   onNewToken: (token: string) => void;
@@ -20,10 +21,11 @@ export function useTokenRefresh({ onNewToken }: UseTokenRefreshOptions) {
 
     const timer = setInterval(async () => {
       try {
-        const data = await apiPost<{ accessToken: string }>('/api/auth/refresh', {});
-        if (data.accessToken) {
-          setJwt(data.accessToken, email);
-          onNewToken(data.accessToken);
+        const data = await apiPost<{ access_token?: string; accessToken?: string }>(`${AUTH_URL}/user/refresh`, {});
+        const token = data.access_token ?? data.accessToken;
+        if (token) {
+          setJwt(token, email);
+          onNewToken(token);
         } else {
           setStatus('session_expired');
           openModal();
