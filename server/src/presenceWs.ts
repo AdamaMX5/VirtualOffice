@@ -33,7 +33,7 @@ import { redisPub, redisSub } from './redis';
 const ROOM     = 'main';
 const CHANNEL  = `vo:${ROOM}:events`;
 const userKey  = (id: string) => `vo:${ROOM}:users:${id}`;
-const USER_TTL = 120;
+const USER_TTL = 3600; // 1 Stunde — verhindert Ablauf bei inaktiven Usern
 
 // ── Typen ─────────────────────────────────────────────────────────────────────
 
@@ -53,7 +53,16 @@ let guestCounter = 0;
 
 let redisReady = false;
 
-redisPub.on('ready', () => { redisReady = true;  console.log('[Presence] Redis bereit — Multi-Instanz-Modus aktiv'); });
+redisPub.on('ready', async () => {
+  redisReady = true;
+  console.log('[Presence] Redis bereit — Multi-Instanz-Modus aktiv');
+  // Bestehende In-Memory-Verbindungen nachträglich in Redis eintragen
+  const existing = [...connections.values()];
+  if (existing.length > 0) {
+    console.log(`[Presence] Synchronisiere ${existing.length} bestehende Verbindung(en) nach Redis`);
+    await Promise.allSettled(existing.map((u) => saveUserState(u)));
+  }
+});
 redisPub.on('close', () => { redisReady = false; console.warn('[Presence] Redis getrennt — Fallback auf lokalen Betrieb'); });
 redisPub.on('error', () => { redisReady = false; }); // Fehlermeldung kommt schon aus redis.ts
 
@@ -201,6 +210,15 @@ redisSub.on('message', (_ch: string, raw: string) => {
     console.warn('[Presence] Ungültiges Redis-Event:', err);
   }
 });
+
+// ── Heartbeat: alle 60 s TTL der aktiven User in Redis erneuern ───────────────
+
+setInterval(async () => {
+  if (!redisReady || connections.size === 0) return;
+  for (const u of connections.values()) {
+    try { await redisPub.expire(userKey(u.user_id), USER_TTL); } catch { /* ignoriert */ }
+  }
+}, 60_000);
 
 // ── WS-Server ─────────────────────────────────────────────────────────────────
 

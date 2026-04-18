@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 interface PlayerState {
   wx: number; // Welt-X in Tile-Einheiten
@@ -11,13 +12,21 @@ interface PlayerState {
   setCurrentRoom: (room: string | null) => void;
 }
 
-export const usePlayerStore = create<PlayerState>((set) => ({
-  wx: 60.0,
-  wy: 45.0,
-  name: '...',
-  currentRoom: null,
+export const usePlayerStore = create<PlayerState>()(
+  persist(
+    (set) => ({
+      wx: 60.0,
+      wy: 45.0,
+      name: '...',
+      currentRoom: null,
 
-  setPosition: (wx, wy) => set({ wx, wy }),
-  setName: (name) => set({ name }),
-  setCurrentRoom: (currentRoom) => set({ currentRoom }),
-}));
+      setPosition: (wx, wy) => set({ wx, wy }),
+      setName: (name) => set({ name }),
+      setCurrentRoom: (currentRoom) => set({ currentRoom }),
+    }),
+    {
+      name: 'vo_player',
+      partialize: (s) => ({ name: s.name }), // nur Name persistieren
+    },
+  ),
+);
