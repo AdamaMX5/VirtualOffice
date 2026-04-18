@@ -92,7 +92,10 @@ async function removeUserState(userId: string): Promise<void> {
   }
 }
 
-/** Snapshot aus Redis — bei Fehler/Offline: Fallback auf lokale Connections. */
+/** Snapshot: Redis-Daten + lokale Connections als Ergänzung.
+ *  Lokale Connections sind die Ground Truth für aktive Verbindungen auf
+ *  dieser Instanz. Redis kann veraltete oder fehlende Einträge haben —
+ *  lokale User werden daher immer hinzugefügt, auch wenn Redis verfügbar ist. */
 async function getSnapshot(excludeId?: string): Promise<Array<{
   user_id: string; name: string; department?: string; x: number; y: number;
 }>> {
@@ -108,6 +111,7 @@ async function getSnapshot(excludeId?: string): Promise<Array<{
       } while (cursor !== '0');
 
       const result = [];
+      const seenIds = new Set<string>();
       for (const key of keys) {
         const userId = key.slice(prefix.length);
         if (userId === excludeId) continue;
@@ -120,7 +124,17 @@ async function getSnapshot(excludeId?: string): Promise<Array<{
           x:          Number(d.x ?? 60),
           y:          Number(d.y ?? 45),
         });
+        seenIds.add(userId);
       }
+
+      // Lokale Connections ergänzen — deckt abgelaufene Redis-Keys und
+      // User ab, die vor dem Redis-Connect verbunden haben
+      for (const u of connections.values()) {
+        if (u.user_id === excludeId) continue;
+        if (seenIds.has(u.user_id)) continue; // schon aus Redis vorhanden
+        result.push({ user_id: u.user_id, name: u.name, department: u.department, x: u.x, y: u.y });
+      }
+
       return result;
     } catch (err) {
       console.warn('[Presence] Redis-Snapshot fehlgeschlagen, nutze lokale Connections:', (err as Error).message);
