@@ -1,15 +1,9 @@
-import { useAuthStore } from '../model/stores/authStore';
 import { MESSAGE_URL } from '../model/constants';
+import { getFreshJwt } from './authClient';
 import type { Message } from '../model/stores/messageStore';
 
-function getJwt(): string {
-  const jwt = useAuthStore.getState().jwt;
-  if (!jwt) throw new Error('Nicht eingeloggt');
-  return jwt;
-}
-
 async function msgFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const jwt = getJwt();
+  const jwt = await getFreshJwt();
   const res = await fetch(`${MESSAGE_URL}${path}`, {
     ...options,
     headers: {

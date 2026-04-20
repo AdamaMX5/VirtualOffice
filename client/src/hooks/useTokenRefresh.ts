@@ -1,41 +1,31 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '../model/stores/authStore';
-import { apiPost } from '../services/apiClient';
-import { AUTH_URL } from '../model/constants';
+import { getFreshJwt } from '../services/authClient';
 
 interface UseTokenRefreshOptions {
   onNewToken: (token: string) => void;
 }
 
 export function useTokenRefresh({ onNewToken }: UseTokenRefreshOptions) {
-  const jwt       = useAuthStore((s) => s.jwt);
-  const setJwt    = useAuthStore((s) => s.setJwt);
-  const setStatus = useAuthStore((s) => s.setStatus);
-  const openModal = useAuthStore((s) => s.openModal);
-  const email     = useAuthStore((s) => s.email);
+  const jwt    = useAuthStore((s) => s.jwt);
+  const email  = useAuthStore((s) => s.email);
 
   useEffect(() => {
     if (!jwt) return;
 
-    const INTERVAL = 10 * 60 * 1000; // 10 Minuten
-
+    // Alle 60s prüfen; getFreshJwt() refresht nur wenn < 2 Min. verbleiben
     const timer = setInterval(async () => {
       try {
-        const data = await apiPost<{ access_token?: string; accessToken?: string }>(`${AUTH_URL}/user/refresh`, {});
-        const token = data.access_token ?? data.accessToken;
-        if (token) {
-          setJwt(token, email);
-          onNewToken(token);
-        } else {
-          setStatus('session_expired');
-          openModal();
+        const fresh = await getFreshJwt();
+        if (fresh !== useAuthStore.getState().jwt) {
+          // Token wurde erneuert → WS informieren
+          onNewToken(fresh);
         }
       } catch {
-        setStatus('session_expired');
-        openModal();
+        // getFreshJwt() öffnet das Modal selbst wenn wirklich abgelaufen
       }
-    }, INTERVAL);
+    }, 60_000);
 
     return () => clearInterval(timer);
-  }, [jwt, email, setJwt, setStatus, openModal, onNewToken]);
+  }, [jwt, email, onNewToken]);
 }

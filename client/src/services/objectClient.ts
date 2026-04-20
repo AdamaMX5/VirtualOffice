@@ -1,11 +1,12 @@
 import { useAuthStore } from '../model/stores/authStore';
 import { OBJECT_URL, MEDIA_URL } from '../model/constants';
+import { getFreshJwt } from './authClient';
 
 // ── JWT helpers ───────────────────────────────────────────────────────────────
 
-/** JWT aus dem Store – nie werfen, damit Requests auch ohne Login abgehen. */
-function getJwt(): string | null {
-  return useAuthStore.getState().jwt;
+/** JWT für Write-Operationen — frisch und nicht abgelaufen. */
+async function getJwt(): Promise<string | null> {
+  try { return await getFreshJwt(); } catch { return null; }
 }
 
 /** Liest die User-ID (sub-Claim) aus dem JWT, ohne Signaturprüfung. */
@@ -51,7 +52,7 @@ export async function listObjects(
   collection: string,
   params?: Record<string, string>,
 ): Promise<ObjectDoc[]> {
-  const jwt = useAuthStore.getState().jwt; // optional
+  const jwt = await getJwt(); // optional aber frisch falls vorhanden
   const qs = params ? '?' + new URLSearchParams(params).toString() : '';
   const result = await objFetch<unknown>(`/objects/${collection}${qs}`, {}, jwt);
   if (Array.isArray(result)) return result as ObjectDoc[];
@@ -68,7 +69,7 @@ export async function createObject(
   app = 'VirtualOffice',
   isPublic = true,
 ): Promise<ObjectDoc> {
-  const jwt = getJwt();
+  const jwt = await getJwt();
   return objFetch<ObjectDoc>(`/objects/${collection}`, {
     method: 'POST',
     body: JSON.stringify({ data, refs, app, isPublic }),
@@ -81,7 +82,7 @@ export async function patchObject(
   data?: Record<string, unknown>,
   refs?: Record<string, string>,
 ): Promise<ObjectDoc> {
-  const jwt = getJwt();
+  const jwt = await getJwt();
   return objFetch<ObjectDoc>(`/objects/${collection}/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ data, refs, merge: true }),
@@ -89,7 +90,7 @@ export async function patchObject(
 }
 
 export async function deleteObject(collection: string, id: string): Promise<void> {
-  const jwt = getJwt();
+  const jwt = await getJwt();
   await objFetch<unknown>(`/objects/${collection}/${id}`, { method: 'DELETE' }, jwt);
 }
 
@@ -102,7 +103,7 @@ export async function uploadMedia(
   name?: string,
   description?: string,
 ): Promise<{ url: string; id: string }> {
-  const jwt = getJwt();
+  const jwt = await getJwt();
   const form = new FormData();
   form.append('file', file);
   form.append('app_name', appName);

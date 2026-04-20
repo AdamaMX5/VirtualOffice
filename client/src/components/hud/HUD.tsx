@@ -101,6 +101,7 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
   const meetingReady = inMeeting && liveKitStatus === 'connected';
 
   return (
+    <>
     <div style={hudStyle}>
       <div style={badgeStyle}>
         <span style={{ color: wsStatusColor(wsStatus) }}>{wsStatusLabel(wsStatus)}</span>
@@ -183,6 +184,7 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
     }}>
       v{__APP_VERSION__}
     </div>
+    </>
   );
 };
 
