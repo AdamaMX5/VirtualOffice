@@ -7,13 +7,13 @@ import { AUTH_URL } from '../../model/constants';
 type Step = 'guest_or_login' | 'confirm_register';
 
 interface LoginResponse {
-  accessToken: string;
+  access_token: string;
   email: string;
   status: string;
   id?: string;
 }
 interface RegisterResponse {
-  accessToken: string;
+  access_token: string;
   email: string;
 }
 
@@ -71,18 +71,18 @@ const LoginModal = () => {
   async function handleLogin() {
     setLoading(true); setError(''); setInfo('');
     try {
-      const data = await apiPost<LoginResponse>('/api/auth/login', {
+      const data = await apiPost<LoginResponse>(`${AUTH_URL}/user/login`, {
         email,
         password,
-        deviceFingerprint: navigator.userAgent,
-        deviceName: 'Virtual Office Web',
+        device_fingerprint: navigator.userAgent,
+        device_name: 'Virtual Office Web',
       });
 
       if (data.status === 'login' || data.status === 'login_with_verify_email_send') {
         if (data.status === 'login_with_verify_email_send') {
           setInfo('Eingeloggt! Verifikations-E-Mail wurde gesendet.');
         }
-        setJwt(data.accessToken, data.email);
+        setJwt(data.access_token, data.email);
         setName(data.email);
         closeModal();
       } else if (data.status === 'register') {
@@ -101,10 +101,10 @@ const LoginModal = () => {
       const data = await apiPost<RegisterResponse>(`${AUTH_URL}/user/register`, {
         email,
         repassword,
-        deviceFingerprint: navigator.userAgent,
-        deviceName: 'Virtual Office Web',
+        device_fingerprint: navigator.userAgent,
+        device_name: 'Virtual Office Web',
       });
-      setJwt(data.accessToken, data.email);
+      setJwt(data.access_token, data.email);
       setName(data.email);
       closeModal();
     } catch (err) {
