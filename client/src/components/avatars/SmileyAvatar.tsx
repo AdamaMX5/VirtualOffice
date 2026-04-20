@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Group, Circle, Shape, Text, Rect } from 'react-konva';
+import { Group, Circle, Shape, Text } from 'react-konva';
 import type Konva from 'konva';
 import { P } from '../../model/constants';
 
@@ -11,7 +11,6 @@ interface SmileyAvatarProps {
   isBot?: boolean;
   animate?: boolean;  // true für Remote-User (Konva-Tween)
   videoElement?: HTMLVideoElement | null;
-  chatText?: string;  // aktuelle Sprechblasen-Nachricht
   onClick?: () => void;
   // Drag-to-Move (nur lokaler Spieler)
   draggable?: boolean;
@@ -20,7 +19,7 @@ interface SmileyAvatarProps {
   onDragEnd?:  (e: Konva.KonvaEventObject<DragEvent>) => void;
 }
 
-const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false, videoElement, chatText, onClick, draggable, onDragStart, onDragMove, onDragEnd }: SmileyAvatarProps) => {
+const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false, videoElement, onClick, draggable, onDragStart, onDragMove, onDragEnd }: SmileyAvatarProps) => {
   const groupRef = useRef<Konva.Group>(null);
 
   // Smooth-Interpolation für Remote-User per Konva-Tween
@@ -124,61 +123,6 @@ const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, 
       {isPlayer && (
         <Circle radius={21} stroke="#fde68a" strokeWidth={1.5} dash={[4, 3]} opacity={0.7} />
       )}
-
-      {/* Sprechblase – dynamische Größe je nach Textlänge */}
-      {chatText && (() => {
-        const len      = chatText.length;
-        const fontSize = len > 100 ? 9 : len > 55 ? 10 : 11;
-        const bW       = 160;
-        const padX     = 8;
-        const padY     = 6;
-        const innerW   = bW - padX * 2;
-        // Näherung: durchschnittliche Zeichenbreite ≈ fontSize * 0.58
-        const charsPerLine = Math.floor(innerW / (fontSize * 0.58));
-        const numLines     = Math.min(Math.ceil(len / charsPerLine), 5);
-        const lineH        = fontSize + 3;
-        const bH           = numLines * lineH + padY * 2;
-        const bX           = -bW / 2;
-        // Bubble-Boden bei y = -32, wächst nach oben
-        const bY = -32 - bH;
-
-        return (
-          <>
-            <Rect
-              x={bX} y={bY}
-              width={bW} height={bH}
-              fill="rgba(255,255,255,0.96)"
-              cornerRadius={8}
-              shadowColor="rgba(0,0,0,0.25)"
-              shadowBlur={6}
-              shadowOffsetY={2}
-            />
-            {/* Schweif-Dreieck */}
-            <Shape
-              sceneFunc={(ctx, shape) => {
-                ctx.beginPath();
-                ctx.moveTo(-7, -32);
-                ctx.lineTo(7, -32);
-                ctx.lineTo(0, -22);
-                ctx.closePath();
-                ctx.fillShape(shape);
-              }}
-              fill="rgba(255,255,255,0.96)"
-            />
-            <Text
-              text={chatText}
-              fontSize={fontSize}
-              fontStyle="bold"
-              fill="#1e293b"
-              x={bX + padX} y={bY + padY}
-              width={innerW}
-              height={numLines * lineH}
-              align="center"
-              wrap="word"
-            />
-          </>
-        );
-      })()}
 
       {/* Name-Label */}
       <Text

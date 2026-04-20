@@ -8,6 +8,7 @@ import { useCameraStore } from '../../model/stores/cameraStore';
 import { useServiceStatusStore } from '../../model/stores/serviceStatusStore';
 import { P } from '../../model/constants';
 import SmileyAvatar from '../avatars/SmileyAvatar';
+import ChatBubble from '../avatars/ChatBubble';
 
 const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }: {
   x: number; y: number; scaleX: number; scaleY: number;
@@ -67,7 +68,6 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
             isPlayer={false}
             isBot={isBot}
             animate={!isBot}
-            chatText={chatBubbles[user.user_id]}
             onClick={user.user_id === 'bot_admin' ? openServiceStatus : undefined}
           />
         );
@@ -80,12 +80,21 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
         name={name}
         isPlayer={true}
         animate={false}
-        chatText={chatBubbles['__self__']}
         draggable
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
       />
+
+      {/* Sprechblasen zuletzt → immer über allen Avataren */}
+      {Object.values(remoteUsers).map((user) =>
+        chatBubbles[user.user_id]
+          ? <ChatBubble key={`bubble-${user.user_id}`} x={user.x} y={user.y} text={chatBubbles[user.user_id]!} />
+          : null
+      )}
+      {chatBubbles['__self__'] && (
+        <ChatBubble x={wx} y={wy} text={chatBubbles['__self__']!} />
+      )}
     </Layer>
   );
 });
