@@ -58,7 +58,7 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
       {/* Remote-User (mit Tween-Animation) */}
       {Object.values(remoteUsers).map((user) => {
         const isBot = user.user_id.startsWith('bot_') || user.name.endsWith('_Bot');
-        const label = user.department ? `${user.name} · ${user.department}` : user.name;
+        const label = (!isBot && user.department) ? `${user.name} · ${user.department}` : user.name;
         return (
           <SmileyAvatar
             key={user.user_id}
