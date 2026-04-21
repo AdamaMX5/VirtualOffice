@@ -237,8 +237,6 @@ const OfficeCanvas = () => {
   const handleStageClick = useCallback((e: { evt: MouseEvent; target: unknown; currentTarget: unknown }) => {
     if (e.evt.button !== 0) return;
     if (!useFurnitureStore.getState().furnitureModeActive) return;
-    // Nur wenn direkt auf den Stage geklickt (nicht auf ein Kind-Node)
-    if (e.target !== e.currentTarget) return;
 
     const pending = useFurnitureStore.getState().pendingCatalogItem;
     if (pending) {
@@ -247,7 +245,7 @@ const OfficeCanvas = () => {
       const tileY = (e.evt.clientY - cam.offset.y) / (cam.scale * P);
       placeItem(pending, tileX, tileY, usePlayerStore.getState().currentRoom ?? undefined);
       useFurnitureStore.getState().setPendingCatalogItem(null);
-    } else {
+    } else if (e.target === e.currentTarget) {
       useFurnitureStore.getState().selectItem(null);
     }
   }, []);

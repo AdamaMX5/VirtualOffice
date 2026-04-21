@@ -6,7 +6,7 @@ import { useFurnitureStore, CatalogItem, PlacedItem } from '../model/stores/furn
 import { usePlayerStore } from '../model/stores/playerStore';
 import {
   listObjects, createObject, patchObject, deleteObject, uploadMedia,
-  browseMedia, MediaFile,
+  browseMedia, deleteMedia, MediaFile,
   getJwtUserId, ObjectDoc,
 } from './objectClient';
 
@@ -209,5 +209,23 @@ export async function deleteCatalogItem(id: string): Promise<void> {
     await deleteObject(CATALOG_COL, id);
   } catch (err) {
     console.error('[furniture] Katalog-Eintrag löschen:', err);
+  }
+}
+
+/** Löscht Katalog-Eintrag UND das zugehörige Bild im MediaService. */
+export async function deleteCatalogItemWithMedia(id: string): Promise<void> {
+  const item = useFurnitureStore.getState().catalogItems.find((i) => i.id === id);
+  useFurnitureStore.getState().removeCatalogItem(id);
+  try { await deleteObject(CATALOG_COL, id); } catch (err) {
+    console.error('[furniture] Katalog-Eintrag löschen:', err);
+  }
+  if (item?.imageUrl) {
+    try {
+      const files = await browseMedia('VirtualOffice', 'furniture');
+      const mediaId = files.find((f) => f.url === item.imageUrl)?.id;
+      if (mediaId) await deleteMedia(mediaId);
+    } catch (err) {
+      console.error('[furniture] Bild löschen:', err);
+    }
   }
 }

@@ -13,7 +13,7 @@ import { useAuthStore } from '../../model/stores/authStore';
 import { getJwtUserId, deleteMedia, MediaFile } from '../../services/objectClient';
 import {
   uploadCatalogItem, registerCatalogItem, listOrphanedMedia,
-  deleteItem, deleteCatalogItem, updateCatalogItem,
+  deleteItem, deleteCatalogItem, deleteCatalogItemWithMedia, updateCatalogItem,
 } from '../../services/furnitureService';
 
 const PRESET_GROUPS = ['Arbeitsplätze', 'Sitzgelegenheiten', 'Boards', 'Dekoration', 'Sonstiges'];
@@ -273,6 +273,7 @@ const EditCatalogForm: React.FC<{ item: CatalogItem; onDone: () => void }> = ({ 
   const [w, setW] = useState(item.defaultWidth);
   const [h, setH] = useState(item.defaultHeight);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState('');
 
   const effectiveGroup = customG.trim() || group;
@@ -291,6 +292,19 @@ const EditCatalogForm: React.FC<{ item: CatalogItem; onDone: () => void }> = ({ 
       setBusy(false);
     }
   }, [item.id, name, effectiveGroup, w, h, onDone]);
+
+  const handleDelete = useCallback(async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await deleteCatalogItemWithMedia(item.id);
+      onDone();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg.replace(/^Error:\s*/, ''));
+      setBusy(false);
+    }
+  }, [item.id, onDone]);
 
   return (
     <div style={{ padding: '8px 12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -321,7 +335,24 @@ const EditCatalogForm: React.FC<{ item: CatalogItem; onDone: () => void }> = ({ 
         onClick={handleSave} disabled={busy}>
         {busy ? 'Speichert...' : '💾 Speichern'}
       </button>
-      <button style={btnStyle('rgba(255,255,255,0.06)')} onClick={onDone}>Abbrechen</button>
+      {confirmDelete ? (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button style={{ ...btnStyle('rgba(239,68,68,0.85)'), flex: 1 }}
+            onClick={handleDelete} disabled={busy}>
+            {busy ? 'Löscht...' : 'Ja, löschen'}
+          </button>
+          <button style={{ ...btnStyle('rgba(255,255,255,0.08)'), flex: 1 }}
+            onClick={() => setConfirmDelete(false)} disabled={busy}>
+            Abbrechen
+          </button>
+        </div>
+      ) : (
+        <button style={btnStyle('rgba(239,68,68,0.6)')}
+          onClick={() => setConfirmDelete(true)} disabled={busy}>
+          🗑 Aus Katalog löschen (+ Bild)
+        </button>
+      )}
+      <button style={btnStyle('rgba(255,255,255,0.06)')} onClick={onDone} disabled={busy}>Abbrechen</button>
     </div>
   );
 };
