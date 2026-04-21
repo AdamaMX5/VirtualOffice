@@ -3,7 +3,6 @@ import http from 'http';
 import path from 'path';
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import cors from 'cors';
 import { AccessToken, EgressClient, EncodedFileOutput, EncodedFileType } from 'livekit-server-sdk';
 
 import { config } from './config';
@@ -14,7 +13,6 @@ import { startReceptionBot, startAdminBot } from './presence';
 const app = express();
 
 app.use(cookieParser());
-app.use(cors({ origin: config.CLIENT_ORIGIN, credentials: true }));
 app.use(express.json());
 
 // ── Auth ──────────────────────────────────────────────────────
