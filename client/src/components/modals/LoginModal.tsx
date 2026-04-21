@@ -15,6 +15,7 @@ interface LoginResponse {
 interface RegisterResponse {
   access_token: string;
   email: string;
+  id?: string;
 }
 
 const overlay: React.CSSProperties = {
@@ -82,7 +83,7 @@ const LoginModal = () => {
         if (data.status === 'login_with_verify_email_send') {
           setInfo('Eingeloggt! Verifikations-E-Mail wurde gesendet.');
         }
-        setJwt(data.access_token, data.email);
+        setJwt(data.access_token, data.email, data.id);
         setName(data.email);
         closeModal();
       } else if (data.status === 'register') {
@@ -104,7 +105,7 @@ const LoginModal = () => {
         device_fingerprint: navigator.userAgent,
         device_name: 'Virtual Office Web',
       });
-      setJwt(data.access_token, data.email);
+      setJwt(data.access_token, data.email, data.id);
       setName(data.email);
       closeModal();
     } catch (err) {

@@ -9,13 +9,16 @@ async function getJwt(): Promise<string | null> {
   try { return await getFreshJwt(); } catch { return null; }
 }
 
-/** Liest die User-ID (sub-Claim) aus dem JWT, ohne Signaturprüfung. */
+/** Gibt die User-ID zurück — bevorzugt den gespeicherten Wert aus dem Store. */
 export function getJwtUserId(): string {
+  const { userId, jwt } = useAuthStore.getState();
+  if (userId) return userId;
+  // Fallback: ID-Claim aus JWT parsen (falls userId noch nicht persistiert ist)
   try {
-    const jwt = useAuthStore.getState().jwt;
     if (!jwt) return '';
     const payload = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return String(payload.sub ?? payload.userId ?? payload.id ?? '');
+    const id = String(payload.id ?? payload.userId ?? '');
+    return id;
   } catch {
     return '';
   }
