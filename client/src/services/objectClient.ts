@@ -76,6 +76,21 @@ export async function createObject(
   }, jwt);
 }
 
+export async function putObject(
+  collection: string,
+  id: string,
+  data: Record<string, unknown>,
+  refs?: Record<string, string>,
+  app = 'VirtualOffice',
+  isPublic = true,
+): Promise<ObjectDoc> {
+  const jwt = await getJwt();
+  return objFetch<ObjectDoc>(`/objects/${collection}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ data, refs, app, isPublic }),
+  }, jwt);
+}
+
 export async function patchObject(
   collection: string,
   id: string,

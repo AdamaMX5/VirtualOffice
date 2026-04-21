@@ -5,7 +5,7 @@
 import { useFurnitureStore, CatalogItem, PlacedItem } from '../model/stores/furnitureStore';
 import { usePlayerStore } from '../model/stores/playerStore';
 import {
-  listObjects, createObject, patchObject, deleteObject, uploadMedia,
+  listObjects, createObject, putObject, patchObject, deleteObject, uploadMedia,
   browseMedia, deleteMedia, MediaFile,
   getJwtUserId, ObjectDoc,
 } from './objectClient';
@@ -199,7 +199,18 @@ export async function updateCatalogItem(
   id: string,
   fields: { name?: string; group?: string; defaultWidth?: number; defaultHeight?: number },
 ): Promise<void> {
-  const doc = await patchObject(CATALOG_COL, id, fields);
+  const existing = useFurnitureStore.getState().catalogItems.find((i) => i.id === id);
+  const data: Record<string, unknown> = {
+    name:          existing?.name          ?? '',
+    type:          existing?.type          ?? fields.group ?? '',
+    group:         existing?.group         ?? '',
+    imageUrl:      existing?.imageUrl      ?? '',
+    defaultWidth:  existing?.defaultWidth  ?? 2,
+    defaultHeight: existing?.defaultHeight ?? 2,
+    ...fields,
+  };
+  const ownerId = getJwtUserId();
+  const doc = await putObject(CATALOG_COL, id, data, { uploadedBy: ownerId });
   useFurnitureStore.getState().updateCatalogItem(id, toCatalogItem(doc));
 }
 
