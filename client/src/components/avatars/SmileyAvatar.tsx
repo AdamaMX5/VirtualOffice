@@ -10,6 +10,7 @@ interface SmileyAvatarProps {
   isPlayer?: boolean;
   isBot?: boolean;
   animate?: boolean;  // true für Remote-User (Konva-Tween)
+  animateDuration?: number; // Tween-Dauer in Sekunden (default 0.1)
   videoElement?: HTMLVideoElement | null;
   onClick?: () => void;
   // Drag-to-Move (nur lokaler Spieler)
@@ -19,14 +20,14 @@ interface SmileyAvatarProps {
   onDragEnd?:  (e: Konva.KonvaEventObject<DragEvent>) => void;
 }
 
-const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false, videoElement, onClick, draggable, onDragStart, onDragMove, onDragEnd }: SmileyAvatarProps) => {
+const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false, animateDuration = 0.1, videoElement, onClick, draggable, onDragStart, onDragMove, onDragEnd }: SmileyAvatarProps) => {
   const groupRef = useRef<Konva.Group>(null);
 
   // Smooth-Interpolation für Remote-User per Konva-Tween
   useEffect(() => {
     if (!animate || !groupRef.current) return;
-    groupRef.current.to({ x: x * P, y: y * P, duration: 0.1 });
-  }, [x, y, animate]);
+    groupRef.current.to({ x: x * P, y: y * P, duration: animateDuration });
+  }, [x, y, animate, animateDuration]);
 
   const posX = animate ? undefined : x * P; // animate-Modus: Position via Tween
   const posY = animate ? undefined : y * P;

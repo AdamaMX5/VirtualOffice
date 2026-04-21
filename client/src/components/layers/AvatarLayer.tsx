@@ -67,7 +67,8 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
             name={label}
             isPlayer={false}
             isBot={isBot}
-            animate={!isBot}
+            animate={true}
+            animateDuration={isBot ? 5 : 0.1}
             onClick={user.user_id === 'bot_admin' ? openServiceStatus : undefined}
           />
         );
