@@ -126,3 +126,32 @@ export async function uploadMedia(
     id:  String(data._id ?? data.id ?? ''),
   };
 }
+
+export interface MediaFile {
+  id: string;
+  url: string;
+  name?: string;
+}
+
+export async function browseMedia(appName: string, folder?: string): Promise<MediaFile[]> {
+  const jwt = await getJwt();
+  const path = folder ? `/browse/${appName}/${folder}` : `/browse/${appName}`;
+  const headers: Record<string, string> = {};
+  if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
+  const res = await fetch(`${MEDIA_URL}${path}`, { headers });
+  if (!res.ok) return [];
+  const data = await res.json() as Record<string, unknown>;
+  const files = Array.isArray(data.files) ? (data.files as Record<string, unknown>[]) : [];
+  return files.map((f) => ({
+    id:   String(f._id ?? f.id ?? ''),
+    url:  String(f.url ?? ''),
+    name: f.name ? String(f.name) : undefined,
+  }));
+}
+
+export async function deleteMedia(id: string): Promise<void> {
+  const jwt = await getJwt();
+  const headers: Record<string, string> = {};
+  if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
+  await fetch(`${MEDIA_URL}/media/${id}`, { method: 'DELETE', headers });
+}

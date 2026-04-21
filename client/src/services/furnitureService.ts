@@ -6,6 +6,7 @@ import { useFurnitureStore, CatalogItem, PlacedItem } from '../model/stores/furn
 import { usePlayerStore } from '../model/stores/playerStore';
 import {
   listObjects, createObject, patchObject, deleteObject, uploadMedia,
+  browseMedia, MediaFile,
   getJwtUserId, ObjectDoc,
 } from './objectClient';
 
@@ -168,6 +169,30 @@ export async function uploadCatalogItem(
   const data = { name, type, group, imageUrl: url, defaultWidth, defaultHeight };
   const doc = await createObject(CATALOG_COL, data, { uploadedBy: ownerId });
   useFurnitureStore.getState().addCatalogItem(toCatalogItem(doc));
+}
+
+/** Erstellt einen Katalog-Eintrag für ein bereits hochgeladenes Bild (kein Re-Upload). */
+export async function registerCatalogItem(
+  imageUrl: string,
+  name: string,
+  type: string,
+  group: string,
+  defaultWidth: number,
+  defaultHeight: number,
+): Promise<void> {
+  const ownerId = getJwtUserId();
+  const data = { name, type, group, imageUrl, defaultWidth, defaultHeight };
+  const doc = await createObject(CATALOG_COL, data, { uploadedBy: ownerId });
+  useFurnitureStore.getState().addCatalogItem(toCatalogItem(doc));
+}
+
+/** Listet Bilder im MediaService-Ordner "furniture", die noch keinen Katalog-Eintrag haben. */
+export async function listOrphanedMedia(): Promise<MediaFile[]> {
+  const files = await browseMedia('VirtualOffice', 'furniture');
+  const catalogUrls = new Set(
+    useFurnitureStore.getState().catalogItems.map((i) => i.imageUrl),
+  );
+  return files.filter((f) => !catalogUrls.has(f.url));
 }
 
 export async function updateCatalogItem(

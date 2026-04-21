@@ -7,11 +7,14 @@
  * - PNG hochladen + Metadaten eingeben → in MediaService + ObjectService speichern
  * - Ausgewähltes Möbel auf der Karte: Löschen-Button
  */
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useFurnitureStore, CatalogItem } from '../../model/stores/furnitureStore';
 import { useAuthStore } from '../../model/stores/authStore';
-import { getJwtUserId } from '../../services/objectClient';
-import { uploadCatalogItem, deleteItem, deleteCatalogItem, updateCatalogItem } from '../../services/furnitureService';
+import { getJwtUserId, deleteMedia, MediaFile } from '../../services/objectClient';
+import {
+  uploadCatalogItem, registerCatalogItem, listOrphanedMedia,
+  deleteItem, deleteCatalogItem, updateCatalogItem,
+} from '../../services/furnitureService';
 
 const PRESET_GROUPS = ['Arbeitsplätze', 'Sitzgelegenheiten', 'Boards', 'Dekoration', 'Sonstiges'];
 
@@ -101,7 +104,10 @@ const btnStyle = (color = 'rgba(79,142,247,0.8)'): React.CSSProperties => ({
 
 const UploadForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [file,    setFile]    = useState<File | null>(null);
+  const [file,           setFile]           = useState<File | null>(null);
+  const [selectedOrphan, setSelectedOrphan] = useState<MediaFile | null>(null);
+  const [orphans,        setOrphans]        = useState<MediaFile[]>([]);
+  const [loadingOrphans, setLoadingOrphans] = useState(true);
   const [name,    setName]    = useState('');
   const [group,   setGroup]   = useState('Sonstiges');
   const [customG, setCustomG] = useState('');
@@ -112,12 +118,36 @@ const UploadForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
 
   const effectiveGroup = customG.trim() || group;
 
+  useEffect(() => {
+    listOrphanedMedia()
+      .then(setOrphans)
+      .catch(() => setOrphans([]))
+      .finally(() => setLoadingOrphans(false));
+  }, []);
+
+  const handleSelectOrphan = (m: MediaFile) => {
+    setSelectedOrphan((prev) => prev?.id === m.id ? null : m);
+    setFile(null);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleDeleteOrphan = async (m: MediaFile) => {
+    await deleteMedia(m.id);
+    setOrphans((prev) => prev.filter((o) => o.id !== m.id));
+    if (selectedOrphan?.id === m.id) setSelectedOrphan(null);
+  };
+
   const handleSubmit = useCallback(async () => {
-    if (!file || !name.trim()) { setError('Datei und Name sind Pflicht'); return; }
+    if (!selectedOrphan && !file) { setError('Datei auswählen oder ein herrenloses Bild wählen'); return; }
+    if (!name.trim()) { setError('Name ist Pflicht'); return; }
     setBusy(true);
     setError('');
     try {
-      await uploadCatalogItem(file, name.trim(), effectiveGroup, effectiveGroup, w, h);
+      if (selectedOrphan) {
+        await registerCatalogItem(selectedOrphan.url, name.trim(), effectiveGroup, effectiveGroup, w, h);
+      } else {
+        await uploadCatalogItem(file!, name.trim(), effectiveGroup, effectiveGroup, w, h);
+      }
       onDone();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -125,18 +155,71 @@ const UploadForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     } finally {
       setBusy(false);
     }
-  }, [file, name, effectiveGroup, w, h, onDone]);
+  }, [file, selectedOrphan, name, effectiveGroup, w, h, onDone]);
 
   return (
     <div style={{ padding: '8px 12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
       {/* Datei-Auswahl */}
       <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp"
         style={{ display: 'none' }}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); }}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) { setFile(f); setSelectedOrphan(null); }
+        }}
       />
-      <button style={btnStyle('rgba(255,255,255,0.1)')} onClick={() => fileRef.current?.click()}>
+      <button style={btnStyle(selectedOrphan ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)')}
+        onClick={() => fileRef.current?.click()}>
         {file ? `📎 ${file.name}` : '📎 PNG auswählen'}
       </button>
+
+      {/* Herrenlose Bilder */}
+      {(loadingOrphans || orphans.length > 0) && (
+        <div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            {loadingOrphans ? 'Lade herrenlose Bilder…' : `Herrenlose Bilder (${orphans.length})`}
+          </div>
+          {!loadingOrphans && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {orphans.map((m) => {
+                const active = selectedOrphan?.id === m.id;
+                return (
+                  <div key={m.id} style={{ position: 'relative', width: 60, flexShrink: 0 }}>
+                    <img
+                      src={m.url}
+                      alt={m.name ?? m.id}
+                      title={m.name ?? m.url}
+                      onClick={() => handleSelectOrphan(m)}
+                      style={{
+                        width: 60, height: 60, objectFit: 'contain', borderRadius: 6,
+                        border: `2px solid ${active ? 'rgba(99,179,237,0.9)' : 'rgba(255,255,255,0.15)'}`,
+                        background: active ? 'rgba(79,142,247,0.2)' : 'rgba(255,255,255,0.05)',
+                        cursor: 'pointer', boxSizing: 'border-box',
+                      }}
+                    />
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteOrphan(m); }}
+                      title="Bild löschen"
+                      style={{
+                        position: 'absolute', top: -5, right: -5,
+                        width: 18, height: 18, borderRadius: '50%',
+                        background: 'rgba(239,68,68,0.9)', border: 'none',
+                        color: '#fff', fontSize: 10, fontWeight: 700,
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        lineHeight: 1,
+                      }}
+                    >✕</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {selectedOrphan && (
+            <div style={{ fontSize: 10, color: 'rgba(99,179,237,0.8)', marginTop: 4 }}>
+              Ausgewählt: {selectedOrphan.name ?? selectedOrphan.url.split('/').pop()} — kein erneuter Upload nötig.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Name */}
       <input style={inputStyle} placeholder="Name *" value={name}
@@ -168,7 +251,7 @@ const UploadForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
       {error && <div style={{ color: '#f87171', fontSize: 11 }}>{error}</div>}
       <button style={btnStyle(busy ? 'rgba(79,142,247,0.4)' : undefined)}
         onClick={handleSubmit} disabled={busy}>
-        {busy ? 'Lädt hoch...' : '⬆ Hochladen'}
+        {busy ? (selectedOrphan ? 'Speichert…' : 'Lädt hoch…') : (selectedOrphan ? '💾 Als Möbel speichern' : '⬆ Hochladen')}
       </button>
       <button style={btnStyle('rgba(255,255,255,0.06)')} onClick={onDone}>
         Abbrechen
