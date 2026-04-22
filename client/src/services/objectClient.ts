@@ -60,8 +60,9 @@ export async function listObjects(
   const result = await objFetch<unknown>(`/objects/${collection}${qs}`, {}, jwt);
   if (Array.isArray(result)) return result as ObjectDoc[];
   const r = result as Record<string, unknown>;
-  if (Array.isArray(r.items)) return r.items as ObjectDoc[];
-  if (Array.isArray(r.data))  return r.data  as ObjectDoc[];
+  if (Array.isArray(r.objects)) return r.objects as ObjectDoc[];
+  if (Array.isArray(r.items))   return r.items   as ObjectDoc[];
+  if (Array.isArray(r.data))    return r.data    as ObjectDoc[];
   return [];
 }
 
