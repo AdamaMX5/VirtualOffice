@@ -131,11 +131,15 @@ async function getSnapshot(excludeId?: string): Promise<Array<{
 
       const result = [];
       const seenIds = new Set<string>();
+      console.log(`[Presence] getSnapshot redis keys=${keys.length}: [${keys.map(k => k.split(':').pop()).join(', ')}]`);
       for (const key of keys) {
         const userId = key.slice(prefix.length);
         if (userId === excludeId) continue;
         const d = await redisPub.hgetall(key);
-        if (!d?.name) continue;
+        if (!d?.name) {
+          console.log(`[Presence] getSnapshot skip key=${key} (kein name-Feld, Inhalt: ${JSON.stringify(d)})`);
+          continue;
+        }
         result.push({
           user_id:    userId,
           name:       d.name,
@@ -196,11 +200,11 @@ function broadcastLocal(msg: object, excludeUserId?: string): void {
   }
 }
 
-function decodeJwtPayload(token: string): { sub?: string } | null {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const part = token.split('.')[1];
     if (!part) return null;
-    return JSON.parse(Buffer.from(part, 'base64url').toString('utf8')) as { sub?: string };
+    return JSON.parse(Buffer.from(part, 'base64url').toString('utf8')) as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -209,8 +213,11 @@ function decodeJwtPayload(token: string): { sub?: string } | null {
 function resolveUserId(token?: string | null, botId?: string | null, isLocalhost = false): string {
   if (isLocalhost && botId) return botId;
   if (token) {
-    const payload = decodeJwtPayload(token);
-    if (payload?.sub) return payload.sub;
+    const payload = decodeJwtPayload(token) as Record<string, unknown> | null;
+    const id = payload
+      ? String(payload.id ?? payload.userId ?? payload.sub ?? '')
+      : '';
+    if (id) return id;
   }
   return `g_${++guestCounter}`;
 }
@@ -268,7 +275,7 @@ export function attachPresenceWs(server: Server): void {
     const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
     const userId  = resolveUserId(token, botId, isLocal);
 
-    console.log(`[Presence] connect  userId=${userId} remote=${remote} redis=${redisReady ? 'ok' : 'offline'}`);
+    console.log(`[Presence] connect  userId=${userId} remote=${remote} isLocal=${isLocal} botId=${botId ?? '-'} redis=${redisReady ? 'ok' : 'offline'}`);
 
     const lastPos = await loadLastPos(userId);
     const user: UserInfo = { ws, user_id: userId, name: userId, x: lastPos.x, y: lastPos.y };
@@ -276,7 +283,7 @@ export function attachPresenceWs(server: Server): void {
 
     try {
       const snapshot = await getSnapshot(userId);
-      console.log(`[Presence] snapshot userId=${userId} users=${snapshot.length}`);
+      console.log(`[Presence] snapshot → userId=${userId} count=${snapshot.length} ids=[${snapshot.map(u => u.user_id).join(', ')}]`);
       sendTo(ws, { type: 'snapshot', users: snapshot });
     } catch (err) {
       console.error('[Presence] Snapshot-Fehler:', (err as Error).message);
@@ -285,6 +292,7 @@ export function attachPresenceWs(server: Server): void {
 
     try {
       await saveUserState(user);
+      console.log(`[Presence] saveUserState OK userId=${userId} x=${user.x} y=${user.y}`);
       await publishEvent({
         type: 'user_joined', user_id: user.user_id,
         name: user.name, x: user.x, y: user.y,
@@ -304,8 +312,9 @@ export function attachPresenceWs(server: Server): void {
           case 'set_name':
             u.name       = String(msg.name       ?? u.name);
             u.department = msg.department ? String(msg.department) : undefined;
-            console.log(`[Presence] set_name userId=${u.user_id} name=${u.name}`);
+            console.log(`[Presence] set_name  userId=${u.user_id} name=${u.name} dept=${u.department ?? '-'}`);
             await saveUserState(u);
+            console.log(`[Presence] set_name  saveUserState OK userId=${u.user_id}`);
             await publishEvent({
               type: 'user_joined', user_id: u.user_id,
               name: u.name, department: u.department, x: u.x, y: u.y,
@@ -323,9 +332,12 @@ export function attachPresenceWs(server: Server): void {
           case 'refresh_token':
             if (msg.token) {
               const payload = decodeJwtPayload(String(msg.token));
-              if (payload?.sub) {
-                console.log(`[Presence] refresh_token userId=${u.user_id} → ${payload.sub}`);
-                u.user_id = payload.sub;
+              const newId = payload
+                ? String(payload.id ?? payload.userId ?? payload.sub ?? '')
+                : '';
+              if (newId) {
+                console.log(`[Presence] refresh_token userId=${u.user_id} → ${newId}`);
+                u.user_id = newId;
               }
             }
             break;
