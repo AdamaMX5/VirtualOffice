@@ -519,9 +519,8 @@ const DeskModal: React.FC = () => {
             : <div style={S.deskFallback} />
           }
 
-          {/* Absolutes Layer: Abdunkelung + Notizen + Overlays */}
+          {/* Absolutes Layer: Notizen + Overlays */}
           <div style={S.deskAbsolute}>
-            <div style={S.deskDimOverlay} />
 
             {!loading && notes.length === 0 && (
               <div style={S.dropHint}>

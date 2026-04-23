@@ -30,10 +30,12 @@ import { redisPub, redisSub } from './redis';
 
 // ── Konstanten ────────────────────────────────────────────────────────────────
 
-const ROOM     = 'main';
-const CHANNEL  = `vo:${ROOM}:events`;
-const userKey  = (id: string) => `vo:${ROOM}:users:${id}`;
-const USER_TTL = 3600; // 1 Stunde — verhindert Ablauf bei inaktiven Usern
+const ROOM        = 'main';
+const CHANNEL     = `vo:${ROOM}:events`;
+const userKey     = (id: string) => `vo:${ROOM}:users:${id}`;
+const lastPosKey  = (id: string) => `vo:${ROOM}:lastpos:${id}`;
+const USER_TTL    = 3600;     // 1 Stunde — Sitzungs-Key
+const LASTPOS_TTL = 604_800;  // 7 Tage — letzte Position bleibt erhalten
 
 // ── Typen ─────────────────────────────────────────────────────────────────────
 
@@ -81,6 +83,23 @@ async function saveUserState(u: UserInfo): Promise<void> {
   } catch (err) {
     console.warn('[Presence] saveUserState fehlgeschlagen:', (err as Error).message);
   }
+}
+
+async function saveLastPos(userId: string, x: number, y: number): Promise<void> {
+  if (!redisReady) return;
+  try {
+    await redisPub.hset(lastPosKey(userId), { x, y });
+    await redisPub.expire(lastPosKey(userId), LASTPOS_TTL);
+  } catch { /* ignoriert */ }
+}
+
+async function loadLastPos(userId: string): Promise<{ x: number; y: number }> {
+  if (!redisReady) return { x: 60, y: 45 };
+  try {
+    const d = await redisPub.hgetall(lastPosKey(userId));
+    if (d?.x && d?.y) return { x: Number(d.x), y: Number(d.y) };
+  } catch { /* ignoriert */ }
+  return { x: 60, y: 45 };
 }
 
 async function removeUserState(userId: string): Promise<void> {
@@ -251,7 +270,8 @@ export function attachPresenceWs(server: Server): void {
 
     console.log(`[Presence] connect  userId=${userId} remote=${remote} redis=${redisReady ? 'ok' : 'offline'}`);
 
-    const user: UserInfo = { ws, user_id: userId, name: userId, x: 60, y: 45 };
+    const lastPos = await loadLastPos(userId);
+    const user: UserInfo = { ws, user_id: userId, name: userId, x: lastPos.x, y: lastPos.y };
     connections.set(ws, user);
 
     try {
@@ -296,6 +316,7 @@ export function attachPresenceWs(server: Server): void {
             u.x = Number(msg.x ?? u.x);
             u.y = Number(msg.y ?? u.y);
             await saveUserState(u);
+            await saveLastPos(u.user_id, u.x, u.y);
             await publishEvent({ type: 'user_moved', user_id: u.user_id, x: u.x, y: u.y });
             break;
 
