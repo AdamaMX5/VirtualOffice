@@ -52,11 +52,11 @@ const OfficeCanvas = () => {
   // Polling + Echtzeit-Notifications (läuft dauerhaft)
   useMessaging();
 
-  // Möbel beim Start + Raumwechsel laden
+  // Möbel einmalig beim Start laden — alle Räume, kein Filter
   useEffect(() => {
     loadCatalog();
-    loadPlacedItems(currentRoom ?? undefined);
-  }, [currentRoom]);
+    loadPlacedItems();
+  }, []);
 
   // ESC: Platzierungs-Modus abbrechen oder Möbel deselektieren
   useEffect(() => {

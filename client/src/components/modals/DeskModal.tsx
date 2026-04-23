@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useDeskStore, DeskNote } from '../../model/stores/deskStore';
 import { useAuthStore } from '../../model/stores/authStore';
 import { usePlayerStore } from '../../model/stores/playerStore';
+import { useFurnitureStore } from '../../model/stores/furnitureStore';
 import { getJwtUserId } from '../../services/objectClient';
 import { loadDeskNotes, addDeskNote, deleteDeskNote, moveDeskNote } from '../../services/deskNoteService';
 
@@ -20,7 +21,7 @@ const S = {
     border: '1px solid rgba(255,255,255,0.12)',
     borderRadius: 16,
     padding: 24,
-    width: 600,
+    width: 860,
     maxWidth: '95vw',
     maxHeight: '90vh',
     display: 'flex',
@@ -54,12 +55,14 @@ const S = {
   },
 
   // Tischfläche
-  deskSurface: (dragOver: boolean) => ({
+  deskSurface: (dragOver: boolean, imageUrl?: string) => ({
     position: 'relative' as const,
     width: '100%',
-    height: 280,
+    height: 440,
     borderRadius: 10,
-    background: 'linear-gradient(150deg, #3b1f0a 0%, #5c2d0e 40%, #3b1f0a 100%)',
+    background: imageUrl
+      ? `url(${imageUrl}) center/cover no-repeat`
+      : 'linear-gradient(150deg, #3b1f0a 0%, #5c2d0e 40%, #3b1f0a 100%)',
     border: dragOver
       ? '2px dashed #f59e0b'
       : '2px solid rgba(255,255,255,0.08)',
@@ -69,15 +72,10 @@ const S = {
     userSelect: 'none' as const,
   }),
 
-  deskGrain: {
+  deskImageOverlay: {
     position: 'absolute' as const,
     inset: 0,
-    opacity: 0.07,
-    backgroundImage: `repeating-linear-gradient(
-      90deg,
-      transparent 0px, transparent 18px,
-      rgba(255,255,255,0.4) 18px, rgba(255,255,255,0.4) 19px
-    )`,
+    background: 'rgba(0,0,0,0.35)',
     pointerEvents: 'none' as const,
   },
 
@@ -309,9 +307,13 @@ const NoteOnDesk: React.FC<NoteOnDeskProps> = ({ note, canDelete, onRead, onDele
 const DeskModal: React.FC = () => {
   const { openDeskId, openDeskOwnerId, openDeskOwnerName, notes, readingNote } = useDeskStore();
   const { closeDesk, setReadingNote } = useDeskStore();
-  const jwt       = useAuthStore((s) => s.jwt);
-  const myName    = usePlayerStore((s) => s.name);
-  const myId      = getJwtUserId();
+  const jwt        = useAuthStore((s) => s.jwt);
+  const myName     = usePlayerStore((s) => s.name);
+  const myId       = getJwtUserId();
+  const placedItems = useFurnitureStore((s) => s.placedItems);
+  const deskImageUrl = openDeskId
+    ? placedItems.find((i) => i.id === openDeskId)?.imageUrl
+    : undefined;
 
   const [noteText,  setNoteText]  = useState('');
   const [dragOver,  setDragOver]  = useState(false);
@@ -402,12 +404,12 @@ const DeskModal: React.FC = () => {
         {/* Tischfläche */}
         <div
           ref={deskSurfaceRef}
-          style={S.deskSurface(dragOver)}
+          style={S.deskSurface(dragOver, deskImageUrl)}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          <div style={S.deskGrain} />
+          <div style={S.deskImageOverlay} />
 
           {!loading && notes.length === 0 && (
             <div style={S.dropHint}>
