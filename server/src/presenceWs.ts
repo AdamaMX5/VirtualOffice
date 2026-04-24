@@ -399,6 +399,7 @@ export function attachPresenceWs(server: Server): void {
       connections.delete(ws);
       console.log(`[Presence] disconnect userId=${u?.user_id ?? '?'} code=${code} reason=${reason.toString() || '–'}`);
       if (u) {
+        await saveLastPos(u.user_id, u.x, u.y).catch(() => {});
         await removeUserState(u.user_id).catch(() => {});
         await publishEvent({ type: 'user_left', user_id: u.user_id }).catch(() => {});
       }
