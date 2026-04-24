@@ -16,6 +16,7 @@ import { Room, RoomEvent } from 'livekit-client';
 import { useAuthStore } from '../model/stores/authStore';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { usePresenceStore } from '../model/stores/presenceStore';
+import { useLiveKitStore } from '../model/stores/liveKitStore';
 import { apiPost } from '../services/apiClient';
 import { presenceSend } from './usePresence';
 import { getJwtUserId } from '../services/objectClient';
@@ -26,6 +27,10 @@ import { PROXIMITY_ENTER, PROXIMITY_EXIT } from '../model/constants';
 let _proxRoom:     Room   | null = null;
 let _proxRoomName: string | null = null;
 let _proxPartner:  string | null = null;
+
+export function getProxRoom(): Room | null { return _proxRoom; }
+
+const LK = () => useLiveKitStore.getState();
 
 const FORCE_TURN = import.meta.env.VITE_LIVEKIT_FORCE_TURN === 'true';
 const DETECTION_MS = 500;
@@ -101,6 +106,19 @@ async function joinProxRoom(
 
     setActiveCall({ partnerUserId: partnerId, partnerName, roomName });
 
+    // VideoGrid mit Proximity-Raum füttern (nur wenn kein Meeting aktiv)
+    if (!LK().isProxCall && LK().status !== 'connected') {
+      const syncParts = () => LK().setParticipantIds([...room.remoteParticipants.keys()]);
+      const bumpTrack = () => LK().bumpTrackVersion();
+      LK().setIsProxCall(true);
+      LK().setStatus('connected');
+      syncParts();
+      room.on(RoomEvent.ParticipantConnected,    syncParts);
+      room.on(RoomEvent.ParticipantDisconnected, syncParts);
+      room.on(RoomEvent.TrackSubscribed,         bumpTrack);
+      room.on(RoomEvent.TrackUnsubscribed,       bumpTrack);
+    }
+
     // Tab-Fokus-Änderungen dynamisch reagieren
     const onVisibility = async () => {
       if (!_proxRoom) return;
@@ -117,6 +135,11 @@ async function joinProxRoom(
         _proxRoomName = null;
         _proxPartner  = null;
         setActiveCall(null);
+        if (LK().isProxCall) {
+          LK().setIsProxCall(false);
+          LK().setStatus('idle');
+          LK().setParticipantIds([]);
+        }
       }
     });
 
@@ -136,6 +159,11 @@ export async function leaveProxRoom(): Promise<void> {
   _proxRoomName = null;
   _proxPartner  = null;
   setActiveCall(null);
+  if (LK().isProxCall) {
+    LK().setIsProxCall(false);
+    LK().setStatus('idle');
+    LK().setParticipantIds([]);
+  }
   await room?.disconnect().catch(() => {});
   console.log('[ProxCall] Getrennt');
 }
@@ -163,7 +191,7 @@ export function useProximityCall() {
         const fromName    = String(event.fromName   ?? '');
         const roomName    = String(event.roomName   ?? '');
         const theirNonce  = Number(event.nonce      ?? 0);
-        if (!roomName || !useAuthStore.getState().jwt) return;
+        if (!roomName) return;
 
         // Schon in diesem Raum (wir haben selbst initiiert) → kein Doppel-Join
         if (_proxRoomName === roomName) return;
@@ -226,11 +254,11 @@ export function useProximityCall() {
       const { wx, wy } = usePlayerStore.getState();
       const remoteUsers = usePresenceStore.getState().remoteUsers;
 
-      // Nächsten eingeloggten (nicht-Bot, nicht-Gast) User finden
+      // Nächsten User finden (kein Bot); Gäste sind erlaubte Gesprächspartner
       let closestId   = '';
       let closestDist = Infinity;
       for (const [userId, user] of Object.entries(remoteUsers)) {
-        if (userId.startsWith('bot_') || userId.startsWith('g_')) continue;
+        if (userId.startsWith('bot_')) continue;
         const d = Math.hypot(wx - user.x, wy - user.y);
         if (d < closestDist) { closestDist = d; closestId = userId; }
       }

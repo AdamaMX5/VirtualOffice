@@ -93,13 +93,14 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
   const authStatus    = useAuthStore((s) => s.authStatus);
   const openModal     = useAuthStore((s) => s.openModal);
   const liveKitStatus = useLiveKitStore((s) => s.status);
+  const isProxCall    = useLiveKitStore((s) => s.isProxCall);
   const unreadTotal   = useMessageStore((s) => s.unreadTotal);
 
   const jwt          = useAuthStore((s) => s.jwt);
   const isAuth       = jwt !== null;
   const showLoginBtn = !isAuth;
   const inMeeting    = currentRoom === 'Meetingraum';
-  const meetingReady = inMeeting && liveKitStatus === 'connected';
+  const meetingReady = inMeeting && liveKitStatus === 'connected' && !isProxCall;
 
   return (
     <>

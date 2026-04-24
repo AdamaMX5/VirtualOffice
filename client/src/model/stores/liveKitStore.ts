@@ -15,6 +15,8 @@ interface LiveKitState {
   error: string | null;
   errorUrl: string | null;
   errorStack: string | null;
+  /** true while a proximity call (not a formal meeting) is shown in VideoGrid */
+  isProxCall: boolean;
   // Actions
   setStatus: (status: LiveKitStatus) => void;
   setRoomName: (name: string | null) => void;
@@ -24,6 +26,7 @@ interface LiveKitState {
   setParticipantIds: (ids: string[]) => void;
   bumpTrackVersion: () => void;
   setError: (error: string | null, url?: string | null, stack?: string | null) => void;
+  setIsProxCall: (v: boolean) => void;
   reset: () => void;
 }
 
@@ -38,6 +41,7 @@ export const useLiveKitStore = create<LiveKitState>((set) => ({
   error: null,
   errorUrl: null,
   errorStack: null,
+  isProxCall: false,
 
   setStatus: (status) => set({ status }),
   setRoomName: (roomName) => set({ roomName }),
@@ -47,6 +51,7 @@ export const useLiveKitStore = create<LiveKitState>((set) => ({
   setParticipantIds: (participantIds) => set({ participantIds }),
   bumpTrackVersion: () => set((s) => ({ trackVersion: s.trackVersion + 1 })),
   setError: (error, url = null, stack = null) => set({ error, errorUrl: url, errorStack: stack }),
+  setIsProxCall: (isProxCall) => set({ isProxCall }),
   reset: () => set({
     status: 'idle',
     roomName: null,
@@ -57,5 +62,6 @@ export const useLiveKitStore = create<LiveKitState>((set) => ({
     error: null,
     errorUrl: null,
     errorStack: null,
+    isProxCall: false,
   }),
 }));

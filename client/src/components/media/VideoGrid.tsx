@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useReducer, useState } from 'react';
 import { Participant, RemoteParticipant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { getRoom } from '../../hooks/useLiveKit';
+import { getProxRoom } from '../../hooks/useProximityCall';
 
 const TILE_W = 128;
 const TILE_H = 72; // 16:9
@@ -114,10 +115,11 @@ const VideoGrid: React.FC = () => {
   const participantIds = useLiveKitStore((s) => s.participantIds);
   const speakerEnabled = useLiveKitStore((s) => s.speakerEnabled);
   const trackVersion   = useLiveKitStore((s) => s.trackVersion);
+  const isProxCall     = useLiveKitStore((s) => s.isProxCall);
   const [collapsed, setCollapsed] = useState(false);
 
   if (status !== 'connected') return null;
-  const room = getRoom();
+  const room = isProxCall ? getProxRoom() : getRoom();
   if (!room) return null;
 
   const remoteParticipants: RemoteParticipant[] = participantIds

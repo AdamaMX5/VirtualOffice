@@ -12,7 +12,6 @@ import VideoManager from './media/VideoManager';
 import VideoGrid from './media/VideoGrid';
 import MediaControls from './media/MediaControls';
 import ConnectionErrorModal from './media/ConnectionErrorModal';
-import ProximityCallBar from './media/ProximityCallBar';
 import MeetingOverlay from './meeting/MeetingOverlay';
 import FurniturePanel from './furniture/FurniturePanel';
 import MessagesPanel from './messages/MessagesPanel';
@@ -298,7 +297,6 @@ const OfficeCanvas = () => {
       <VideoGrid />
       <MediaControls />
       {showMeeting && <MeetingOverlay onClose={() => setShowMeeting(false)} />}
-      <ProximityCallBar />
       <ConnectionErrorModal />
       <VirtualJoystick />
       {furnitureModeActive && <FurniturePanel onClose={toggleFurnitureMode} />}
