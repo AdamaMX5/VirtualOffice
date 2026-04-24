@@ -6,6 +6,8 @@ export const ZOOM_MAX  = 4.0;
 export const ZOOM_MIN  = 0.15;        // wird durch minScale() überschrieben
 export const CAM_SPEED = 5;           // Pixel/Frame für Pfeil-Kamerasteuerung
 export const SEND_INTERVAL = 50;      // ms zwischen WS-Positionsupdates
+export const PROXIMITY_ENTER = 4.0;  // Tiles — Nähe-Call starten
+export const PROXIMITY_EXIT  = 6.0;  // Tiles — Nähe-Call beenden (Hysterese)
 
 // Backend-URLs – direkt zu den Microservices
 export const AUTH_URL = import.meta.env.VITE_AUTH_URL ?? 'https://auth.freischule.info';

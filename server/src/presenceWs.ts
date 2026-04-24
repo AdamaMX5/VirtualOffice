@@ -244,6 +244,18 @@ redisSub.on('message', (_ch: string, raw: string) => {
       return;
     }
 
+    // Proximity-Events: nur an Zielnutzer weiterleiten
+    if (event.type === 'proximity_call' || event.type === 'proximity_ended') {
+      const targetId = String(event.targetUserId ?? '');
+      for (const u of connections.values()) {
+        if (u.user_id === targetId) {
+          sendTo(u.ws, event);
+          break;
+        }
+      }
+      return;
+    }
+
     const excludeId = typeof event.user_id === 'string' ? event.user_id : undefined;
     broadcastLocal(event, excludeId);
   } catch (err) {
@@ -345,6 +357,29 @@ export function attachPresenceWs(server: Server): void {
           case 'notify_user': {
             const targetId = String(msg.targetUserId ?? '');
             await publishEvent({ type: 'notify_user', targetUserId: targetId, senderId: u.user_id });
+            break;
+          }
+
+          case 'proximity_enter': {
+            // Nur eingeloggte (nicht Gast, nicht Bot) dürfen Calls initiieren
+            if (u.user_id.startsWith('g_') || u.user_id.startsWith('bot_')) break;
+            const targetId = String(msg.targetUserId ?? '');
+            const roomName = String(msg.roomName     ?? '');
+            if (!targetId || !roomName) break;
+            console.log(`[Presence] proximity_enter from=${u.user_id} target=${targetId} room=${roomName}`);
+            await publishEvent({
+              type: 'proximity_call', targetUserId: targetId,
+              fromUserId: u.user_id, fromName: u.name, roomName,
+            });
+            break;
+          }
+
+          case 'proximity_exit': {
+            const targetId = String(msg.targetUserId ?? '');
+            const roomName = String(msg.roomName     ?? '');
+            if (!targetId || !roomName) break;
+            console.log(`[Presence] proximity_exit from=${u.user_id} target=${targetId} room=${roomName}`);
+            await publishEvent({ type: 'proximity_ended', targetUserId: targetId, roomName });
             break;
           }
 

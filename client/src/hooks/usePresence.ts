@@ -4,6 +4,7 @@ import { usePresenceStore } from '../model/stores/presenceStore';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useMessageStore } from '../model/stores/messageStore';
 import { getUnreadCount } from '../services/messageClient';
+import { dispatchProxEvent } from './useProximityCall';
 import { WS_PATH } from '../model/constants';
 import type { WsInbound, WsOutbound } from '../model/types';
 
@@ -99,6 +100,10 @@ export function usePresence() {
           setTimeout(() => clearChatBubble(data.userId), 5000);
           break;
         }
+        case 'proximity_call':
+        case 'proximity_ended':
+          dispatchProxEvent(data as unknown as Record<string, unknown>);
+          break;
       }
     };
 

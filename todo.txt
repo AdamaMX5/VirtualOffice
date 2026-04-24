@@ -1,6 +1,9 @@
-Videocall aufzeichnen:
-- baue bitte ein Button für die Aufzeichnung vom Videocall ein.
-- lokal sollen alle Teilnehmer einzelne MP4 (ist ein anderes Format geeigneter?) Datein gespeichert werden. 
-    - So habe ich einzelne Tonspuren, welche ich pro Teilnehmer bei der Videoerstellung anpassen kann.
-    - hast du eine Idee, wie wir die Synchronisierung vereinfachen können?
-- der LiveKit Server soll sicherheitshalber auch eine Aufnahme erstellen. Dort reicht es, wenn alle VideoStreams in eine Datei geschrieben werden.
+{"type":"user_left","user_id":"kurt@flussmark.info"}
+{"type":"user_joined","user_id":"kurt@flussmark.info","name":"kurt@flussmark.info","department":"","x":0.0,"y":0.0}
+
+
+beim Refresh token schließt der User kurz den Websocket und verbindet sich neu. 
+Leider kommt da wieder die 0/0 Position. 
+Bitte fix den Fehler.
+
+Auch ist hier als user_id die userID zu verwenden und nicht die Emailadresse. Die EmailAdresse als Namen ist richtig, da es noch keinen ProfilService gibt.

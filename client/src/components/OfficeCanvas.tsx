@@ -12,6 +12,7 @@ import VideoManager from './media/VideoManager';
 import VideoGrid from './media/VideoGrid';
 import MediaControls from './media/MediaControls';
 import ConnectionErrorModal from './media/ConnectionErrorModal';
+import ProximityCallBar from './media/ProximityCallBar';
 import MeetingOverlay from './meeting/MeetingOverlay';
 import FurniturePanel from './furniture/FurniturePanel';
 import MessagesPanel from './messages/MessagesPanel';
@@ -20,6 +21,7 @@ import { useGameLoop } from '../hooks/useGameLoop';
 import { useCamera } from '../hooks/useCamera';
 import { useTokenRefresh } from '../hooks/useTokenRefresh';
 import { useMeetingRoom } from '../hooks/useMeetingRoom';
+import { useProximityCall } from '../hooks/useProximityCall';
 import { useCameraStore } from '../model/stores/cameraStore';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useFurnitureStore } from '../model/stores/furnitureStore';
@@ -85,6 +87,7 @@ const OfficeCanvas = () => {
   // Presence-WebSocket
   const { sendMove, sendRefreshToken } = usePresence();
   useMeetingRoom();
+  useProximityCall();
   useTokenRefresh({ onNewToken: sendRefreshToken });
 
   // Kamera (Zoom + Drag)
@@ -295,6 +298,7 @@ const OfficeCanvas = () => {
       <VideoGrid />
       <MediaControls />
       {showMeeting && <MeetingOverlay onClose={() => setShowMeeting(false)} />}
+      <ProximityCallBar />
       <ConnectionErrorModal />
       <VirtualJoystick />
       {furnitureModeActive && <FurniturePanel onClose={toggleFurnitureMode} />}
