@@ -23,14 +23,20 @@ interface SmileyAvatarProps {
 const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false, animateDuration = 0.1, videoElement, onClick, draggable, onDragStart, onDragMove, onDragEnd }: SmileyAvatarProps) => {
   const groupRef = useRef<Konva.Group>(null);
 
-  // Smooth-Interpolation für Remote-User per Konva-Tween
+  // Initiale Position einmalig per Ref festhalten — so startet der Avatar
+  // beim ersten Erscheinen sofort an der richtigen Stelle statt bei (0,0).
+  // Nach dem Mount übernimmt der Tween die Positionskontrolle exklusiv;
+  // React ändert die x/y-Props des Groups nicht mehr (initPos bleibt konstant).
+  const initPos = useRef({ x: x * P, y: y * P });
+
   useEffect(() => {
     if (!animate || !groupRef.current) return;
     groupRef.current.to({ x: x * P, y: y * P, duration: animateDuration });
   }, [x, y, animate, animateDuration]);
 
-  const posX = animate ? undefined : x * P; // animate-Modus: Position via Tween
-  const posY = animate ? undefined : y * P;
+  // animate-Modus: Props nur für die erste Positionierung, danach Tween
+  const posX = animate ? initPos.current.x : x * P;
+  const posY = animate ? initPos.current.y : y * P;
 
   return (
     <Group
