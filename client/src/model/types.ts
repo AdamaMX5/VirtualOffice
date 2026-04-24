@@ -31,9 +31,10 @@ export interface WsMoved     { type: 'user_moved';  user_id: string; x: number; 
 export interface WsLeft       { type: 'user_left';    user_id: string }
 export interface WsNewMessage      { type: 'new_message';     senderId: string }
 export interface WsChatMessage     { type: 'chat';            userId: string; text: string }
-export interface WsProximityCall   { type: 'proximity_call';  fromUserId: string; fromName: string; roomName: string }
-export interface WsProximityEnded  { type: 'proximity_ended'; roomName: string }
-export type WsInbound = WsSnapshot | WsJoined | WsMoved | WsLeft | WsNewMessage | WsChatMessage | WsProximityCall | WsProximityEnded;
+export interface WsProximityCall     { type: 'proximity_call';     fromUserId: string; fromName: string; roomName: string; nonce: number }
+export interface WsProximityEnded    { type: 'proximity_ended';    roomName: string }
+export interface WsProximityRedirect { type: 'proximity_redirect'; fromUserId: string; fromName: string; existingRoom: string }
+export type WsInbound = WsSnapshot | WsJoined | WsMoved | WsLeft | WsNewMessage | WsChatMessage | WsProximityCall | WsProximityEnded | WsProximityRedirect;
 
 // ── WebSocket-Nachrichten (ausgehend zum PresenceService) ─────────────────────
 export interface WsMsgSetName        { type: 'set_name';        name: string }
@@ -41,9 +42,10 @@ export interface WsMsgMove           { type: 'move';            x: number; y: nu
 export interface WsMsgRefreshToken   { type: 'refresh_token';   token: string }
 export interface WsMsgNotifyUser     { type: 'notify_user';     targetUserId: string }
 export interface WsMsgChat           { type: 'chat';            text: string }
-export interface WsMsgProximityEnter { type: 'proximity_enter'; targetUserId: string; roomName: string }
-export interface WsMsgProximityExit  { type: 'proximity_exit';  targetUserId: string; roomName: string }
-export type WsOutbound = WsMsgSetName | WsMsgMove | WsMsgRefreshToken | WsMsgNotifyUser | WsMsgChat | WsMsgProximityEnter | WsMsgProximityExit;
+export interface WsMsgProximityEnter    { type: 'proximity_enter';    targetUserId: string; roomName: string; nonce: number }
+export interface WsMsgProximityExit     { type: 'proximity_exit';     targetUserId: string; roomName: string }
+export interface WsMsgProximityRedirect { type: 'proximity_redirect'; targetUserId: string; existingRoom: string }
+export type WsOutbound = WsMsgSetName | WsMsgMove | WsMsgRefreshToken | WsMsgNotifyUser | WsMsgChat | WsMsgProximityEnter | WsMsgProximityExit | WsMsgProximityRedirect;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export type AuthStatus =

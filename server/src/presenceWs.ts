@@ -245,7 +245,7 @@ redisSub.on('message', (_ch: string, raw: string) => {
     }
 
     // Proximity-Events: nur an Zielnutzer weiterleiten
-    if (event.type === 'proximity_call' || event.type === 'proximity_ended') {
+    if (event.type === 'proximity_call' || event.type === 'proximity_ended' || event.type === 'proximity_redirect') {
       const targetId = String(event.targetUserId ?? '');
       for (const u of connections.values()) {
         if (u.user_id === targetId) {
@@ -365,11 +365,12 @@ export function attachPresenceWs(server: Server): void {
             if (u.user_id.startsWith('g_') || u.user_id.startsWith('bot_')) break;
             const targetId = String(msg.targetUserId ?? '');
             const roomName = String(msg.roomName     ?? '');
+            const nonce    = Number(msg.nonce        ?? 0);
             if (!targetId || !roomName) break;
-            console.log(`[Presence] proximity_enter from=${u.user_id} target=${targetId} room=${roomName}`);
+            console.log(`[Presence] proximity_enter from=${u.user_id} target=${targetId} room=${roomName} nonce=${nonce}`);
             await publishEvent({
               type: 'proximity_call', targetUserId: targetId,
-              fromUserId: u.user_id, fromName: u.name, roomName,
+              fromUserId: u.user_id, fromName: u.name, roomName, nonce,
             });
             break;
           }
@@ -380,6 +381,18 @@ export function attachPresenceWs(server: Server): void {
             if (!targetId || !roomName) break;
             console.log(`[Presence] proximity_exit from=${u.user_id} target=${targetId} room=${roomName}`);
             await publishEvent({ type: 'proximity_ended', targetUserId: targetId, roomName });
+            break;
+          }
+
+          case 'proximity_redirect': {
+            const targetId     = String(msg.targetUserId  ?? '');
+            const existingRoom = String(msg.existingRoom  ?? '');
+            if (!targetId || !existingRoom) break;
+            console.log(`[Presence] proximity_redirect from=${u.user_id} target=${targetId} room=${existingRoom}`);
+            await publishEvent({
+              type: 'proximity_redirect', targetUserId: targetId,
+              fromUserId: u.user_id, fromName: u.name, existingRoom,
+            });
             break;
           }
 

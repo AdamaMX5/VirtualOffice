@@ -153,7 +153,7 @@ export function useProximityCall() {
   nameRef.current     = myName;
 
   // Laufender Anruf — nur für Ausgangsanrufe (wird bei eingehenden per proxEventHandler gesetzt)
-  const outgoingRef = useRef<{ userId: string; roomName: string } | null>(null);
+  const outgoingRef = useRef<{ userId: string; roomName: string; nonce: number } | null>(null);
 
   // ── Eingehende Events vom Presence-Server ──────────────────────────────────
   useEffect(() => {
@@ -162,16 +162,52 @@ export function useProximityCall() {
         const fromUserId  = String(event.fromUserId ?? '');
         const fromName    = String(event.fromName   ?? '');
         const roomName    = String(event.roomName   ?? '');
+        const theirNonce  = Number(event.nonce      ?? 0);
         if (!roomName || !useAuthStore.getState().jwt) return;
-        if (_proxRoomName === roomName) return; // schon drin
+
+        // Schon in diesem Raum (wir haben selbst initiiert) → kein Doppel-Join
+        if (_proxRoomName === roomName) return;
+
+        // Wir sind bereits in einem anderen Anruf → älteren Raum gewinnen lassen,
+        // Initiator in unseren bestehenden Raum umleiten
+        if (_proxRoom && _proxRoomName) {
+          console.log(`[ProxCall] Bereits in ${_proxRoomName}, leite ${fromName} um`);
+          presenceSend({ type: 'proximity_redirect', targetUserId: fromUserId, existingRoom: _proxRoomName });
+          return;
+        }
+
+        // Wir haben gleichzeitig auch einen Anruf an dieselbe Person gesendet →
+        // höhere Nonce gewinnt als Initiator; niedrigere Nonce fügt sich ein
+        const out = outgoingRef.current;
+        if (out && out.userId === fromUserId && out.roomName === roomName) {
+          if (out.nonce > theirNonce) {
+            // Wir sind Initiator (höhere Nonce) — wir haben schon gejoint → kein Doppel-Join
+            return;
+          }
+          // Sie sind Initiator → wir treten als Callee bei (outgoing verwerfen)
+          outgoingRef.current = null;
+        }
+
         console.log(`[ProxCall] Eingehend von ${fromName} (${fromUserId})`);
         await joinProxRoom(roomName, fromUserId, fromName, identityRef.current, nameRef.current);
+
       } else if (event.type === 'proximity_ended') {
         const roomName = String(event.roomName ?? '');
         if (_proxRoomName === roomName) {
           outgoingRef.current = null;
           await leaveProxRoom();
         }
+
+      } else if (event.type === 'proximity_redirect') {
+        const existingRoom = String(event.existingRoom ?? '');
+        const fromUserId   = String(event.fromUserId   ?? '');
+        const fromName     = String(event.fromName     ?? fromUserId);
+        if (!existingRoom || existingRoom === _proxRoomName) return;
+        console.log(`[ProxCall] Umgeleitet in bestehenden Raum ${existingRoom} von ${fromName}`);
+        // Aktuellen Raum verlassen und in den bestehenden eintreten
+        if (_proxRoom) await leaveProxRoom();
+        outgoingRef.current = null;
+        await joinProxRoom(existingRoom, fromUserId, fromName, identityRef.current, nameRef.current);
       }
     });
     return () => setProxEventHandler(null);
@@ -205,8 +241,9 @@ export function useProximityCall() {
         // Call starten
         const partner  = remoteUsers[closestId];
         const roomName = 'prox_' + [id, closestId].sort().join('_');
-        outgoingRef.current = { userId: closestId, roomName };
-        presenceSend({ type: 'proximity_enter', targetUserId: closestId, roomName });
+        const nonce    = Math.floor(Math.random() * 10000);
+        outgoingRef.current = { userId: closestId, roomName, nonce };
+        presenceSend({ type: 'proximity_enter', targetUserId: closestId, roomName, nonce });
         joinProxRoom(roomName, closestId, partner.name, identityRef.current, nameRef.current);
 
       } else if (active) {

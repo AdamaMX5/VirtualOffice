@@ -17,7 +17,7 @@ export function getJwtUserId(): string {
   try {
     if (!jwt) return '';
     const payload = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    const id = String(payload.id ?? payload.userId ?? '');
+    const id = String(payload.id ?? payload.userId ?? payload.sub ?? '');
     return id;
   } catch {
     return '';
