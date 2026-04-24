@@ -10,10 +10,10 @@ export const SEND_INTERVAL = 50;      // ms zwischen WS-Positionsupdates
 // Backend-URLs – direkt zu den Microservices
 export const AUTH_URL = import.meta.env.VITE_AUTH_URL ?? 'https://auth.freischule.info';
 
-// Presence-WS: integriert im Express-Server auf office2.freischule.info
+// Presence-WS: integriert im Express-Server (URL via VITE_PRESENCE_WS_URL)
 const _wsOrigin = import.meta.env.VITE_PRESENCE_WS_URL ?? (
-  typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? 'wss://office2.freischule.info'
+  typeof window !== 'undefined'
+    ? (window.location.protocol === 'https:' ? 'wss' : 'ws') + '://' + window.location.host
     : 'ws://localhost:3000'
 );
 export const WS_PATH = `${_wsOrigin}/ws`;
