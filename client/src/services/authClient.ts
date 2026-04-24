@@ -63,3 +63,14 @@ export async function getFreshJwt(bufferSeconds = 120): Promise<string> {
   useAuthStore.getState().openModal();
   throw new Error('Session abgelaufen');
 }
+
+/** Meldet den User ab — invalidiert den Refresh-Token auf dem Server und löscht den lokalen State. */
+export async function logout(): Promise<void> {
+  try {
+    await fetch(`${AUTH_URL}/user/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch { /* ignoriert — lokaler State wird trotzdem gelöscht */ }
+  useAuthStore.getState().clearAuth();
+}

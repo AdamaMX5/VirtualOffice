@@ -5,6 +5,7 @@ import { useCameraStore } from '../../model/stores/cameraStore';
 import { useAuthStore } from '../../model/stores/authStore';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useMessageStore } from '../../model/stores/messageStore';
+import { logout } from '../../services/authClient';
 
 const isTouchDevice =
   typeof window !== 'undefined' &&
@@ -174,6 +175,20 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
       {showLoginBtn && (
         <button style={loginBtnStyle} onClick={openModal}>
           🔑 Einloggen
+        </button>
+      )}
+      {isAuth && (
+        <button
+          style={{
+            ...meetingBtnStyle,
+            background: 'rgba(15,15,19,0.85)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: 'rgba(255,255,255,0.45)',
+            fontSize: 11,
+          }}
+          onClick={logout}
+        >
+          Abmelden
         </button>
       )}
     </div>
