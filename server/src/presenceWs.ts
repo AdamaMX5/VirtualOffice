@@ -37,6 +37,10 @@ const lastPosKey  = (id: string) => `vo:${ROOM}:lastpos:${id}`;
 const USER_TTL    = 3600;     // 1 Stunde — Sitzungs-Key
 const LASTPOS_TTL = 604_800;  // 7 Tage — letzte Position bleibt erhalten
 
+// ── In-Memory Fallback für letzte Positionen (wenn Redis offline) ─────────────
+
+const _lastPosCache = new Map<string, { x: number; y: number }>();
+
 // ── Typen ─────────────────────────────────────────────────────────────────────
 
 interface UserInfo {
@@ -86,6 +90,7 @@ async function saveUserState(u: UserInfo): Promise<void> {
 }
 
 async function saveLastPos(userId: string, x: number, y: number): Promise<void> {
+  _lastPosCache.set(userId, { x, y }); // immer lokal cachen als Fallback
   if (!redisReady) return;
   try {
     await redisPub.hset(lastPosKey(userId), { x, y });
@@ -94,12 +99,13 @@ async function saveLastPos(userId: string, x: number, y: number): Promise<void> 
 }
 
 async function loadLastPos(userId: string): Promise<{ x: number; y: number }> {
-  if (!redisReady) return { x: 60, y: 45 };
-  try {
-    const d = await redisPub.hgetall(lastPosKey(userId));
-    if (d?.x && d?.y) return { x: Number(d.x), y: Number(d.y) };
-  } catch { /* ignoriert */ }
-  return { x: 60, y: 45 };
+  if (redisReady) {
+    try {
+      const d = await redisPub.hgetall(lastPosKey(userId));
+      if (d?.x && d?.y) return { x: Number(d.x), y: Number(d.y) };
+    } catch { /* ignoriert */ }
+  }
+  return _lastPosCache.get(userId) ?? { x: 60, y: 45 };
 }
 
 async function removeUserState(userId: string): Promise<void> {
@@ -181,6 +187,8 @@ function routeEventLocally(event: Record<string, unknown>): void {
 
   if (isTargeted) {
     const targetId = String(event.targetUserId ?? '');
+    const connectedIds = [...connections.values()].map((u) => u.user_id).join(', ');
+    console.log(`[Presence] route ${type} → target=${targetId} connections=[${connectedIds}]`);
     let sent = false;
     for (const u of connections.values()) {
       if (u.user_id === targetId) {
@@ -193,7 +201,7 @@ function routeEventLocally(event: Record<string, unknown>): void {
       }
     }
     if (!sent) {
-      console.warn(`[Presence] ${type} → Ziel ${targetId} nicht in connections (${connections.size} verbunden)`);
+      console.warn(`[Presence] ${type} → Ziel ${targetId} NICHT GEFUNDEN in connections=[${connectedIds}]`);
     }
     return;
   }

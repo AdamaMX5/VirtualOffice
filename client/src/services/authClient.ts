@@ -26,8 +26,8 @@ async function doRefresh(): Promise<string | null> {
     const data = await res.json() as Record<string, unknown>;
     const token = (data.access_token ?? data.accessToken) as string | undefined;
     if (!token) return null;
-    const { email, setJwt } = useAuthStore.getState();
-    setJwt(token, email);
+    const { email, userId, setJwt } = useAuthStore.getState();
+    setJwt(token, email, userId); // userId beibehalten damit getJwtUserId() stabil bleibt
     return token;
   } catch {
     return null;
