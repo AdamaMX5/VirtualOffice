@@ -101,8 +101,10 @@ async function joinProxRoom(
 
     // Kamera/Mic nur wenn Tab fokussiert; Audio immer empfangen
     const focused = !document.hidden;
-    await room.localParticipant.setMicrophoneEnabled(focused).catch(() => {});
-    await room.localParticipant.setCameraEnabled(focused).catch(() => {});
+    await room.localParticipant.setMicrophoneEnabled(focused)
+      .catch((e) => console.warn('[ProxCall] Mic aktivieren fehlgeschlagen:', e));
+    await room.localParticipant.setCameraEnabled(focused)
+      .catch((e) => console.warn('[ProxCall] Kamera aktivieren fehlgeschlagen:', e));
 
     setActiveCall({ partnerUserId: partnerId, partnerName, roomName });
 
@@ -175,13 +177,18 @@ export function useProximityCall() {
   const email  = useAuthStore((s) => s.email);
   const myName = usePlayerStore((s) => s.name);
 
-  const identityRef = useRef(email || myName);
-  const nameRef     = useRef(myName);
-  identityRef.current = email || myName;
-  nameRef.current     = myName;
+  // Stabile Fallback-ID für Gäste ohne E-Mail/Name (LiveKit benötigt non-empty identity)
+  const guestFallback = useRef('guest-' + Math.random().toString(36).slice(2, 7));
+
+  const identityRef = useRef(email || myName || guestFallback.current);
+  const nameRef     = useRef(myName || guestFallback.current);
+  identityRef.current = email || myName || guestFallback.current;
+  nameRef.current     = myName || guestFallback.current;
 
   // Laufender Anruf — nur für Ausgangsanrufe (wird bei eingehenden per proxEventHandler gesetzt)
   const outgoingRef = useRef<{ userId: string; roomName: string; nonce: number } | null>(null);
+  // Letzte Position für den selfMoved-Check
+  const prevPosRef  = useRef<{ wx: number; wy: number } | null>(null);
 
   // ── Eingehende Events vom Presence-Server ──────────────────────────────────
   useEffect(() => {
@@ -247,11 +254,21 @@ export function useProximityCall() {
     // Nur für eingeloggte, nicht-Gast-User
     if (!jwt || !myId || myId.startsWith('g_')) return;
 
+    prevPosRef.current = null; // Position-History bei (Re-)Login zurücksetzen
+
     const interval = setInterval(() => {
       const id = getJwtUserId();
       if (!id || id.startsWith('g_')) return;
 
       const { wx, wy } = usePlayerStore.getState();
+
+      // selfMoved: Call nur initiieren, wenn WIR uns bewegt haben.
+      // Verhindert, dass ein stehender Auth-User einen Call startet,
+      // weil jemand anderes in seine Nähe gelaufen ist.
+      const prev = prevPosRef.current;
+      const selfMoved = prev !== null && Math.hypot(wx - prev.wx, wy - prev.wy) > 0.1;
+      prevPosRef.current = { wx, wy };
+
       const remoteUsers = usePresenceStore.getState().remoteUsers;
 
       // Nächsten User finden (kein Bot); Gäste sind erlaubte Gesprächspartner
@@ -265,8 +282,8 @@ export function useProximityCall() {
 
       const active = outgoingRef.current;
 
-      if (!active && closestId && closestDist < PROXIMITY_ENTER) {
-        // Call starten
+      if (!active && closestId && closestDist < PROXIMITY_ENTER && selfMoved) {
+        // Call starten (nur wenn wir uns selbst bewegt haben)
         const partner  = remoteUsers[closestId];
         const roomName = 'prox_' + [id, closestId].sort().join('_');
         const nonce    = Math.floor(Math.random() * 10000);
