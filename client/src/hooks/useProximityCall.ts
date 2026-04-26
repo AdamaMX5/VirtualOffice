@@ -70,6 +70,7 @@ export function setProxEventHandler(cb: ProxEventHandler | null): void {
 }
 
 export function dispatchProxEvent(event: Record<string, unknown>): void {
+  console.log('[ProxCall] dispatchProxEvent handler vorhanden:', !!_proxEventHandler, 'event:', event.type);
   _proxEventHandler?.(event);
 }
 
@@ -189,20 +190,27 @@ export function useProximityCall() {
         const fromUserId = String(event.fromUserId ?? '');
         const fromName   = String(event.fromName   ?? '');
         const roomName   = String(event.roomName   ?? '');
-        if (!roomName) return;
+        console.log(`[ProxCall] proximity_call empfangen — from=${fromUserId} room=${roomName}`);
+        if (!roomName) { console.log('[ProxCall] abgebrochen: kein roomName'); return; }
 
         // Eigene Broadcasts ignorieren
         const myId = getJwtUserId() || identityRef.current;
+        console.log(`[ProxCall] myId=${myId} fromUserId=${fromUserId} gleich=${fromUserId === myId}`);
         if (fromUserId === myId) return;
 
         // Schon in einem Raum → ignorieren
+        console.log(`[ProxCall] bereits in Raum: proxRoom=${!!_proxRoom} activeRef=${!!activeRef.current}`);
         if (_proxRoom || activeRef.current) return;
 
         // Nur beitreten wenn wir nah genug am Initiator sind
         const { wx, wy } = usePlayerStore.getState();
-        const caller = usePresenceStore.getState().remoteUsers[fromUserId];
+        const remoteUsers = usePresenceStore.getState().remoteUsers;
+        const caller = remoteUsers[fromUserId];
+        console.log(`[ProxCall] caller im Store: ${!!caller} remoteUsers keys: [${Object.keys(remoteUsers).join(', ')}]`);
         if (!caller) return;
-        if (Math.hypot(wx - caller.x, wy - caller.y) >= PROXIMITY_ENTER) return;
+        const dist = Math.hypot(wx - caller.x, wy - caller.y);
+        console.log(`[ProxCall] Distanz zu caller: ${dist.toFixed(2)} PROXIMITY_ENTER=${PROXIMITY_ENTER}`);
+        if (dist >= PROXIMITY_ENTER) return;
 
         console.log(`[ProxCall] Eingehend von ${fromName} (${fromUserId}), Raum: ${roomName}`);
         activeRef.current = { ownerUserId: fromUserId, roomName, isOwner: false };
@@ -251,9 +259,11 @@ export function useProximityCall() {
           if (d < closestDist) { closestDist = d; closestId = userId; }
         }
 
+        console.log(`[ProxCall] nächster User: ${closestId} dist=${closestDist.toFixed(2)} ENTER=${PROXIMITY_ENTER} selfMoved=${selfMoved}`);
         if (closestId && closestDist < PROXIMITY_ENTER) {
           const partner  = remoteUsers[closestId];
-          const roomName = 'prox_' + id; // Raum nach unserer eigenen ID
+          const roomName = 'prox_' + id;
+          console.log(`[ProxCall] Initiiere Call → room=${roomName} target=${closestId}`);
           activeRef.current = { ownerUserId: id, roomName, isOwner: true };
           presenceSend({ type: 'proximity_enter', roomName });
           joinProxRoom(roomName, id, partner.name, identityRef.current, nameRef.current);

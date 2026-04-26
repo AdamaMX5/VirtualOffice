@@ -103,6 +103,7 @@ export function usePresence() {
         }
         case 'proximity_call':
         case 'proximity_ended':
+          console.log('[WS] proximity event empfangen:', data.type, data);
           dispatchProxEvent(data as unknown as Record<string, unknown>);
           break;
         case 'meeting_bg':
