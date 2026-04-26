@@ -396,6 +396,15 @@ export function attachPresenceWs(server: Server): void {
             break;
           }
 
+          case 'meeting_bg': {
+            // Nur eingeloggte User dürfen den Hintergrund setzen
+            if (u.user_id.startsWith('g_') || u.user_id.startsWith('bot_')) break;
+            const backgroundUrl = msg.backgroundUrl === null ? null : String(msg.backgroundUrl ?? '');
+            console.log(`[Presence] meeting_bg from=${u.user_id} url=${backgroundUrl ?? 'null'}`);
+            await publishEvent({ type: 'meeting_bg', backgroundUrl });
+            break;
+          }
+
           case 'chat': {
             const text = String(msg.text ?? '').slice(0, 500);
             if (text) await publishEvent({ type: 'chat', userId: u.user_id, text });

@@ -3,6 +3,7 @@ import { useAuthStore } from '../model/stores/authStore';
 import { usePresenceStore } from '../model/stores/presenceStore';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useMessageStore } from '../model/stores/messageStore';
+import { useMeetingStore } from '../model/stores/meetingStore';
 import { getUnreadCount } from '../services/messageClient';
 import { dispatchProxEvent } from './useProximityCall';
 import { WS_PATH } from '../model/constants';
@@ -104,6 +105,9 @@ export function usePresence() {
         case 'proximity_ended':
         case 'proximity_redirect':
           dispatchProxEvent(data as unknown as Record<string, unknown>);
+          break;
+        case 'meeting_bg':
+          useMeetingStore.getState().setBgUrl((data as { backgroundUrl: string | null }).backgroundUrl);
           break;
       }
     };

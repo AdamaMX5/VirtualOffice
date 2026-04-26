@@ -34,7 +34,8 @@ export interface WsChatMessage     { type: 'chat';            userId: string; te
 export interface WsProximityCall     { type: 'proximity_call';     fromUserId: string; fromName: string; roomName: string; nonce: number }
 export interface WsProximityEnded    { type: 'proximity_ended';    roomName: string }
 export interface WsProximityRedirect { type: 'proximity_redirect'; fromUserId: string; fromName: string; existingRoom: string }
-export type WsInbound = WsSnapshot | WsJoined | WsMoved | WsLeft | WsNewMessage | WsChatMessage | WsProximityCall | WsProximityEnded | WsProximityRedirect;
+export interface WsMeetingBg         { type: 'meeting_bg';         backgroundUrl: string | null }
+export type WsInbound = WsSnapshot | WsJoined | WsMoved | WsLeft | WsNewMessage | WsChatMessage | WsProximityCall | WsProximityEnded | WsProximityRedirect | WsMeetingBg;
 
 // ── WebSocket-Nachrichten (ausgehend zum PresenceService) ─────────────────────
 export interface WsMsgSetName        { type: 'set_name';        name: string }
@@ -45,7 +46,8 @@ export interface WsMsgChat           { type: 'chat';            text: string }
 export interface WsMsgProximityEnter    { type: 'proximity_enter';    targetUserId: string; roomName: string; nonce: number }
 export interface WsMsgProximityExit     { type: 'proximity_exit';     targetUserId: string; roomName: string }
 export interface WsMsgProximityRedirect { type: 'proximity_redirect'; targetUserId: string; existingRoom: string }
-export type WsOutbound = WsMsgSetName | WsMsgMove | WsMsgRefreshToken | WsMsgNotifyUser | WsMsgChat | WsMsgProximityEnter | WsMsgProximityExit | WsMsgProximityRedirect;
+export interface WsMsgMeetingBg         { type: 'meeting_bg';         backgroundUrl: string | null }
+export type WsOutbound = WsMsgSetName | WsMsgMove | WsMsgRefreshToken | WsMsgNotifyUser | WsMsgChat | WsMsgProximityEnter | WsMsgProximityExit | WsMsgProximityRedirect | WsMsgMeetingBg;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export type AuthStatus =

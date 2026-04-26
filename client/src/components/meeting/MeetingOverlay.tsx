@@ -7,8 +7,11 @@ import { Participant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useParticipantVolumeStore } from '../../model/stores/participantVolumeStore';
 import { useMessageStore } from '../../model/stores/messageStore';
+import { useMeetingStore } from '../../model/stores/meetingStore';
 import { getRoom } from '../../hooks/useLiveKit';
 import { useRecording } from '../../hooks/useRecording';
+import { presenceSend } from '../../hooks/usePresence';
+import { loadMeetingBg, uploadAndSaveMeetingBg, clearMeetingBg } from '../../services/meetingService';
 
 // ── Grid-Berechnung ───────────────────────────────────────────────────────────
 
@@ -231,23 +234,43 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
   const unreadTotal     = useMessageStore((s) => s.unreadTotal);
   const messagesPanelOpen = useMessageStore((s) => s.panelOpen);
   const toggleMessages  = useMessageStore((s) => s.togglePanel);
+  const bgUrl           = useMeetingStore((s) => s.bgUrl);
   const { isRecording, startRecording, stopRecording, tabHidden } = useRecording();
 
-  const [bgUrl, setBgUrl]   = useState<string | null>(null);
-  const bgInputRef          = useRef<HTMLInputElement>(null);
+  const bgInputRef  = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
-  const handleBgUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  // Hintergrundbild beim Öffnen laden (falls noch nicht im Store)
+  useEffect(() => {
+    if (!useMeetingStore.getState().bgObjectId) {
+      loadMeetingBg();
+    }
+  }, []);
+
+  const handleBgUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (bgUrl) URL.revokeObjectURL(bgUrl);
-    setBgUrl(URL.createObjectURL(file));
-  }, [bgUrl]);
+    e.target.value = '';
+    setUploading(true);
+    try {
+      const url = await uploadAndSaveMeetingBg(file);
+      presenceSend({ type: 'meeting_bg', backgroundUrl: url });
+    } catch (err) {
+      console.error('[Meeting] Hintergrund-Upload fehlgeschlagen:', err);
+    } finally {
+      setUploading(false);
+    }
+  }, []);
+
+  const handleClearBg = useCallback(async () => {
+    await clearMeetingBg();
+    presenceSend({ type: 'meeting_bg', backgroundUrl: null });
+  }, []);
 
   const handleClose = useCallback(() => {
     if (isRecording) stopRecording();
-    if (bgUrl) URL.revokeObjectURL(bgUrl);
     onClose();
-  }, [isRecording, stopRecording, bgUrl, onClose]);
+  }, [isRecording, stopRecording, onClose]);
 
   const room = getRoom();
   if (!room) return null;
@@ -349,11 +372,16 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
         </button>
 
         {/* Hintergrundbild */}
-        <button onClick={() => bgInputRef.current?.click()} style={btnBase} title="Hintergrundbild hochladen">
-          {bgUrl ? '🖼 Hintergrund ändern' : '🖼 Hintergrund'}
+        <button
+          onClick={() => bgInputRef.current?.click()}
+          style={{ ...btnBase, opacity: uploading ? 0.5 : 1 }}
+          disabled={uploading}
+          title="Hintergrundbild hochladen (für alle Teilnehmer)"
+        >
+          {uploading ? '⏳ Lädt...' : bgUrl ? '🖼 Hintergrund ändern' : '🖼 Hintergrund'}
         </button>
         {bgUrl && (
-          <button onClick={() => { URL.revokeObjectURL(bgUrl); setBgUrl(null); }} style={btnBase} title="Hintergrund entfernen">
+          <button onClick={handleClearBg} style={btnBase} title="Hintergrund für alle entfernen">
             ✕ Hintergrund
           </button>
         )}
