@@ -170,7 +170,39 @@ async function getSnapshot(excludeId?: string): Promise<Array<{
     .map(({ user_id, name, department, x, y }) => ({ user_id, name, department, x, y }));
 }
 
-/** Publish via Redis — bei Fehler/Offline: direkt lokal broadcasten. */
+/** Leitet ein Event lokal an den richtigen Empfänger weiter.
+ *  Zielgerichtete Events (proximity_*, notify_user) gehen nur an den Zielnutzer;
+ *  alle anderen werden an alle außer dem Sender gebroadcastet. */
+function routeEventLocally(event: Record<string, unknown>): void {
+  const type = String(event.type ?? '');
+  const isTargeted = [
+    'proximity_call', 'proximity_ended', 'proximity_redirect', 'notify_user',
+  ].includes(type);
+
+  if (isTargeted) {
+    const targetId = String(event.targetUserId ?? '');
+    let sent = false;
+    for (const u of connections.values()) {
+      if (u.user_id === targetId) {
+        const msg = type === 'notify_user'
+          ? { type: 'new_message', senderId: event.senderId }
+          : event;
+        sendTo(u.ws, msg);
+        sent = true;
+        break;
+      }
+    }
+    if (!sent) {
+      console.warn(`[Presence] ${type} → Ziel ${targetId} nicht in connections (${connections.size} verbunden)`);
+    }
+    return;
+  }
+
+  const excludeId = typeof event.user_id === 'string' ? event.user_id : undefined;
+  broadcastLocal(event, excludeId);
+}
+
+/** Publish via Redis — bei Fehler/Offline: direkt lokal routen. */
 async function publishEvent(event: object): Promise<void> {
   if (redisReady) {
     try {
@@ -180,10 +212,7 @@ async function publishEvent(event: object): Promise<void> {
       console.warn('[Presence] Redis-Publish fehlgeschlagen, fallback lokal:', (err as Error).message);
     }
   }
-  // Fallback: direkt lokal broadcasten (kein Redis-Echo nötig, also kein excludeId)
-  const ev = event as Record<string, unknown>;
-  const excludeId = typeof ev.user_id === 'string' ? ev.user_id : undefined;
-  broadcastLocal(event, excludeId);
+  routeEventLocally(event as Record<string, unknown>);
 }
 
 // ── WS-Helpers ────────────────────────────────────────────────────────────────
@@ -232,32 +261,7 @@ redisSub.subscribe(CHANNEL, (err) => {
 redisSub.on('message', (_ch: string, raw: string) => {
   try {
     const event = JSON.parse(raw) as Record<string, unknown>;
-
-    if (event.type === 'notify_user') {
-      const targetId = String(event.targetUserId ?? '');
-      for (const u of connections.values()) {
-        if (u.user_id === targetId) {
-          sendTo(u.ws, { type: 'new_message', senderId: event.senderId });
-          break;
-        }
-      }
-      return;
-    }
-
-    // Proximity-Events: nur an Zielnutzer weiterleiten
-    if (event.type === 'proximity_call' || event.type === 'proximity_ended' || event.type === 'proximity_redirect') {
-      const targetId = String(event.targetUserId ?? '');
-      for (const u of connections.values()) {
-        if (u.user_id === targetId) {
-          sendTo(u.ws, event);
-          break;
-        }
-      }
-      return;
-    }
-
-    const excludeId = typeof event.user_id === 'string' ? event.user_id : undefined;
-    broadcastLocal(event, excludeId);
+    routeEventLocally(event);
   } catch (err) {
     console.warn('[Presence] Ungültiges Redis-Event:', err);
   }
