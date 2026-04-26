@@ -103,7 +103,6 @@ export function usePresence() {
         }
         case 'proximity_call':
         case 'proximity_ended':
-        case 'proximity_redirect':
           dispatchProxEvent(data as unknown as Record<string, unknown>);
           break;
         case 'meeting_bg':

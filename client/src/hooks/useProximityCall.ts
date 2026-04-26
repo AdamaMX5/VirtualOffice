@@ -3,8 +3,9 @@
  * wenn sich ein angemeldeter User einem anderen nähert.
  *
  * Schwellwerte: PROXIMITY_ENTER (rein) / PROXIMITY_EXIT (raus mit Hysterese)
- * Signalisierung: Presence-WebSocket (proximity_enter / proximity_exit)
+ * Signalisierung: Presence-WebSocket (proximity_enter broadcast → alle prüfen selbst)
  * LiveKit: separater _proxRoom-Singleton, unabhängig vom Meeting-Raum
+ * Raumname: prox_<initiatorUserId> — erlaubt Gruppe (3+ Personen im selben Raum)
  *
  * Tab-Fokus-Regel:
  *   - Tab fokussiert → Kamera + Mikro aktiv
@@ -26,7 +27,6 @@ import { PROXIMITY_ENTER, PROXIMITY_EXIT } from '../model/constants';
 
 let _proxRoom:     Room   | null = null;
 let _proxRoomName: string | null = null;
-let _proxPartner:  string | null = null;
 
 export function getProxRoom(): Room | null { return _proxRoom; }
 
@@ -38,9 +38,9 @@ const DETECTION_MS = 500;
 // ── Aktiver-Anruf-State für UI (minimaler reaktiver Store) ───────────────────
 
 export interface ActiveProxCall {
-  partnerUserId: string;
-  partnerName:   string;
-  roomName:      string;
+  ownerUserId: string;
+  partnerName: string;
+  roomName:    string;
 }
 
 let _activeCall: ActiveProxCall | null = null;
@@ -77,7 +77,7 @@ export function dispatchProxEvent(event: Record<string, unknown>): void {
 
 async function joinProxRoom(
   roomName:    string,
-  partnerId:   string,
+  ownerUserId: string,
   partnerName: string,
   identity:    string,
   name:        string,
@@ -95,20 +95,17 @@ async function joinProxRoom(
     const room = new Room({ adaptiveStream: true, dynacast: true });
     _proxRoom     = room;
     _proxRoomName = roomName;
-    _proxPartner  = partnerId;
 
     await room.connect(url, token, FORCE_TURN ? { rtcConfig: { iceTransportPolicy: 'relay' } } : {});
 
-    // Kamera/Mic nur wenn Tab fokussiert; Audio immer empfangen
     const focused = !document.hidden;
     await room.localParticipant.setMicrophoneEnabled(focused)
       .catch((e) => console.warn('[ProxCall] Mic aktivieren fehlgeschlagen:', e));
     await room.localParticipant.setCameraEnabled(focused)
       .catch((e) => console.warn('[ProxCall] Kamera aktivieren fehlgeschlagen:', e));
 
-    setActiveCall({ partnerUserId: partnerId, partnerName, roomName });
+    setActiveCall({ ownerUserId, partnerName, roomName });
 
-    // VideoGrid mit Proximity-Raum füttern (nur wenn kein Meeting aktiv)
     if (!LK().isProxCall && LK().status !== 'connected') {
       const syncParts = () => LK().setParticipantIds([...room.remoteParticipants.keys()]);
       const bumpTrack = () => LK().bumpTrackVersion();
@@ -121,7 +118,6 @@ async function joinProxRoom(
       room.on(RoomEvent.TrackUnsubscribed,       bumpTrack);
     }
 
-    // Tab-Fokus-Änderungen dynamisch reagieren
     const onVisibility = async () => {
       if (!_proxRoom) return;
       const isFocused = !document.hidden;
@@ -135,7 +131,6 @@ async function joinProxRoom(
       if (_proxRoom === room) {
         _proxRoom     = null;
         _proxRoomName = null;
-        _proxPartner  = null;
         setActiveCall(null);
         if (LK().isProxCall) {
           LK().setIsProxCall(false);
@@ -145,12 +140,11 @@ async function joinProxRoom(
       }
     });
 
-    console.log(`[ProxCall] Verbunden mit ${roomName}, Partner: ${partnerName}`);
+    console.log(`[ProxCall] Verbunden mit ${roomName}`);
   } catch (err) {
     console.warn('[ProxCall] joinProxRoom Fehler:', err);
     _proxRoom     = null;
     _proxRoomName = null;
-    _proxPartner  = null;
     setActiveCall(null);
   }
 }
@@ -159,7 +153,6 @@ export async function leaveProxRoom(): Promise<void> {
   const room = _proxRoom;
   _proxRoom     = null;
   _proxRoomName = null;
-  _proxPartner  = null;
   setActiveCall(null);
   if (LK().isProxCall) {
     LK().setIsProxCall(false);
@@ -177,7 +170,6 @@ export function useProximityCall() {
   const email  = useAuthStore((s) => s.email);
   const myName = usePlayerStore((s) => s.name);
 
-  // Stabile Fallback-ID für Gäste ohne E-Mail/Name (LiveKit benötigt non-empty identity)
   const guestFallback = useRef('guest-' + Math.random().toString(36).slice(2, 7));
 
   const identityRef = useRef(email || myName || guestFallback.current);
@@ -185,76 +177,54 @@ export function useProximityCall() {
   identityRef.current = email || myName || guestFallback.current;
   nameRef.current     = myName || guestFallback.current;
 
-  // Laufender Anruf — nur für Ausgangsanrufe (wird bei eingehenden per proxEventHandler gesetzt)
-  const outgoingRef = useRef<{ userId: string; roomName: string; nonce: number } | null>(null);
-  // Letzte Position für den selfMoved-Check
-  const prevPosRef  = useRef<{ wx: number; wy: number } | null>(null);
+  // Laufender Anruf: ownerUserId = wessen Raum (eigener wenn wir initiiert haben)
+  const activeRef  = useRef<{ ownerUserId: string; roomName: string; isOwner: boolean } | null>(null);
+  const prevPosRef = useRef<{ wx: number; wy: number } | null>(null);
 
   // ── Eingehende Events vom Presence-Server ──────────────────────────────────
   useEffect(() => {
     setProxEventHandler(async (event) => {
+
       if (event.type === 'proximity_call') {
-        const fromUserId  = String(event.fromUserId ?? '');
-        const fromName    = String(event.fromName   ?? '');
-        const roomName    = String(event.roomName   ?? '');
-        const theirNonce  = Number(event.nonce      ?? 0);
+        const fromUserId = String(event.fromUserId ?? '');
+        const fromName   = String(event.fromName   ?? '');
+        const roomName   = String(event.roomName   ?? '');
         if (!roomName) return;
 
-        // Schon in diesem Raum (wir haben selbst initiiert) → kein Doppel-Join
-        if (_proxRoomName === roomName) return;
+        // Eigene Broadcasts ignorieren
+        const myId = getJwtUserId() || identityRef.current;
+        if (fromUserId === myId) return;
 
-        // Wir sind bereits in einem anderen Anruf → älteren Raum gewinnen lassen,
-        // Initiator in unseren bestehenden Raum umleiten
-        if (_proxRoom && _proxRoomName) {
-          console.log(`[ProxCall] Bereits in ${_proxRoomName}, leite ${fromName} um`);
-          presenceSend({ type: 'proximity_redirect', targetUserId: fromUserId, existingRoom: _proxRoomName });
-          return;
-        }
+        // Schon in einem Raum → ignorieren
+        if (_proxRoom || activeRef.current) return;
 
-        // Wir haben gleichzeitig auch einen Anruf an dieselbe Person gesendet →
-        // höhere Nonce gewinnt als Initiator; niedrigere Nonce fügt sich ein
-        const out = outgoingRef.current;
-        if (out && out.userId === fromUserId && out.roomName === roomName) {
-          if (out.nonce > theirNonce) {
-            // Wir sind Initiator (höhere Nonce) — wir haben schon gejoint → kein Doppel-Join
-            return;
-          }
-          // Sie sind Initiator → wir treten als Callee bei (outgoing verwerfen)
-          outgoingRef.current = null;
-        }
+        // Nur beitreten wenn wir nah genug am Initiator sind
+        const { wx, wy } = usePlayerStore.getState();
+        const caller = usePresenceStore.getState().remoteUsers[fromUserId];
+        if (!caller) return;
+        if (Math.hypot(wx - caller.x, wy - caller.y) >= PROXIMITY_ENTER) return;
 
-        console.log(`[ProxCall] Eingehend von ${fromName} (${fromUserId})`);
+        console.log(`[ProxCall] Eingehend von ${fromName} (${fromUserId}), Raum: ${roomName}`);
+        activeRef.current = { ownerUserId: fromUserId, roomName, isOwner: false };
         await joinProxRoom(roomName, fromUserId, fromName, identityRef.current, nameRef.current);
 
       } else if (event.type === 'proximity_ended') {
         const roomName = String(event.roomName ?? '');
         if (_proxRoomName === roomName) {
-          outgoingRef.current = null;
+          activeRef.current = null;
           await leaveProxRoom();
         }
-
-      } else if (event.type === 'proximity_redirect') {
-        const existingRoom = String(event.existingRoom ?? '');
-        const fromUserId   = String(event.fromUserId   ?? '');
-        const fromName     = String(event.fromName     ?? fromUserId);
-        if (!existingRoom || existingRoom === _proxRoomName) return;
-        console.log(`[ProxCall] Umgeleitet in bestehenden Raum ${existingRoom} von ${fromName}`);
-        // Aktuellen Raum verlassen und in den bestehenden eintreten
-        if (_proxRoom) await leaveProxRoom();
-        outgoingRef.current = null;
-        await joinProxRoom(existingRoom, fromUserId, fromName, identityRef.current, nameRef.current);
       }
     });
     return () => setProxEventHandler(null);
-  }, []); // bewusst leer — verwendet nur Refs und Modul-State
+  }, []);
 
   // ── Proximity-Erkennungs-Loop ──────────────────────────────────────────────
   useEffect(() => {
     const myId = getJwtUserId();
-    // Nur für eingeloggte, nicht-Gast-User
     if (!jwt || !myId || myId.startsWith('g_')) return;
 
-    prevPosRef.current = null; // Position-History bei (Re-)Login zurücksetzen
+    prevPosRef.current = null;
 
     const interval = setInterval(() => {
       const id = getJwtUserId();
@@ -262,42 +232,50 @@ export function useProximityCall() {
 
       const { wx, wy } = usePlayerStore.getState();
 
-      // selfMoved: Call nur initiieren, wenn WIR uns bewegt haben.
-      // Verhindert, dass ein stehender Auth-User einen Call startet,
-      // weil jemand anderes in seine Nähe gelaufen ist.
       const prev = prevPosRef.current;
       const selfMoved = prev !== null && Math.hypot(wx - prev.wx, wy - prev.wy) > 0.1;
       prevPosRef.current = { wx, wy };
 
       const remoteUsers = usePresenceStore.getState().remoteUsers;
+      const active = activeRef.current;
 
-      // Nächsten User finden (kein Bot); Gäste sind erlaubte Gesprächspartner
-      let closestId   = '';
-      let closestDist = Infinity;
-      for (const [userId, user] of Object.entries(remoteUsers)) {
-        if (userId.startsWith('bot_')) continue;
-        const d = Math.hypot(wx - user.x, wy - user.y);
-        if (d < closestDist) { closestDist = d; closestId = userId; }
-      }
+      if (!active) {
+        // Nur initiieren wenn wir uns selbst bewegt haben
+        if (!selfMoved) return;
 
-      const active = outgoingRef.current;
+        let closestId   = '';
+        let closestDist = Infinity;
+        for (const [userId, user] of Object.entries(remoteUsers)) {
+          if (userId.startsWith('bot_')) continue;
+          const d = Math.hypot(wx - user.x, wy - user.y);
+          if (d < closestDist) { closestDist = d; closestId = userId; }
+        }
 
-      if (!active && closestId && closestDist < PROXIMITY_ENTER && selfMoved) {
-        // Call starten (nur wenn wir uns selbst bewegt haben)
-        const partner  = remoteUsers[closestId];
-        const roomName = 'prox_' + [id, closestId].sort().join('_');
-        const nonce    = Math.floor(Math.random() * 10000);
-        outgoingRef.current = { userId: closestId, roomName, nonce };
-        presenceSend({ type: 'proximity_enter', targetUserId: closestId, roomName, nonce });
-        joinProxRoom(roomName, closestId, partner.name, identityRef.current, nameRef.current);
+        if (closestId && closestDist < PROXIMITY_ENTER) {
+          const partner  = remoteUsers[closestId];
+          const roomName = 'prox_' + id; // Raum nach unserer eigenen ID
+          activeRef.current = { ownerUserId: id, roomName, isOwner: true };
+          presenceSend({ type: 'proximity_enter', roomName });
+          joinProxRoom(roomName, id, partner.name, identityRef.current, nameRef.current);
+        }
 
-      } else if (active) {
-        const partner = remoteUsers[active.userId];
-        const dist = partner ? Math.hypot(wx - partner.x, wy - partner.y) : Infinity;
-        if (dist > PROXIMITY_EXIT) {
-          // Call beenden
-          presenceSend({ type: 'proximity_exit', targetUserId: active.userId, roomName: active.roomName });
-          outgoingRef.current = null;
+      } else if (active.isOwner) {
+        // Initiator bleibt solange IRGENDWER in der Nähe ist
+        const anyoneClose = Object.values(remoteUsers).some((user) =>
+          Math.hypot(wx - user.x, wy - user.y) < PROXIMITY_EXIT,
+        );
+        if (!anyoneClose) {
+          presenceSend({ type: 'proximity_exit', roomName: active.roomName });
+          activeRef.current = null;
+          leaveProxRoom();
+        }
+
+      } else {
+        // Joiner verlässt wenn der Initiator zu weit weg ist
+        const owner = remoteUsers[active.ownerUserId];
+        const ownerDist = owner ? Math.hypot(wx - owner.x, wy - owner.y) : Infinity;
+        if (ownerDist > PROXIMITY_EXIT) {
+          activeRef.current = null;
           leaveProxRoom();
         }
       }
@@ -305,15 +283,13 @@ export function useProximityCall() {
 
     return () => {
       clearInterval(interval);
-      // Cleanup bei Unmount
-      if (outgoingRef.current) {
-        const { userId, roomName } = outgoingRef.current;
-        presenceSend({ type: 'proximity_exit', targetUserId: userId, roomName });
-        outgoingRef.current = null;
-        leaveProxRoom();
+      if (activeRef.current?.isOwner) {
+        presenceSend({ type: 'proximity_exit', roomName: activeRef.current.roomName });
       }
+      activeRef.current = null;
+      leaveProxRoom();
     };
-  }, [jwt]); // jwt-Änderung → User ein-/ausloggen
+  }, [jwt]);
 
   return { hangUp: leaveProxRoom };
 }

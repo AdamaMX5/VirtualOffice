@@ -181,9 +181,7 @@ async function getSnapshot(excludeId?: string): Promise<Array<{
  *  alle anderen werden an alle außer dem Sender gebroadcastet. */
 function routeEventLocally(event: Record<string, unknown>): void {
   const type = String(event.type ?? '');
-  const isTargeted = [
-    'proximity_call', 'proximity_ended', 'proximity_redirect', 'notify_user',
-  ].includes(type);
+  const isTargeted = ['notify_user'].includes(type);
 
   if (isTargeted) {
     const targetId = String(event.targetUserId ?? '');
@@ -375,36 +373,20 @@ export function attachPresenceWs(server: Server): void {
           case 'proximity_enter': {
             // Nur eingeloggte (nicht Gast, nicht Bot) dürfen Calls initiieren
             if (u.user_id.startsWith('g_') || u.user_id.startsWith('bot_')) break;
-            const targetId = String(msg.targetUserId ?? '');
-            const roomName = String(msg.roomName     ?? '');
-            const nonce    = Number(msg.nonce        ?? 0);
-            if (!targetId || !roomName) break;
-            console.log(`[Presence] proximity_enter from=${u.user_id} target=${targetId} room=${roomName} nonce=${nonce}`);
-            await publishEvent({
-              type: 'proximity_call', targetUserId: targetId,
-              fromUserId: u.user_id, fromName: u.name, roomName, nonce,
-            });
+            const roomName = String(msg.roomName ?? '');
+            if (!roomName) break;
+            console.log(`[Presence] proximity_enter from=${u.user_id} room=${roomName}`);
+            // Broadcast an alle — jeder Client prüft selbst ob er nah genug ist
+            await publishEvent({ type: 'proximity_call', fromUserId: u.user_id, fromName: u.name, roomName });
             break;
           }
 
           case 'proximity_exit': {
-            const targetId = String(msg.targetUserId ?? '');
-            const roomName = String(msg.roomName     ?? '');
-            if (!targetId || !roomName) break;
-            console.log(`[Presence] proximity_exit from=${u.user_id} target=${targetId} room=${roomName}`);
-            await publishEvent({ type: 'proximity_ended', targetUserId: targetId, roomName });
-            break;
-          }
-
-          case 'proximity_redirect': {
-            const targetId     = String(msg.targetUserId  ?? '');
-            const existingRoom = String(msg.existingRoom  ?? '');
-            if (!targetId || !existingRoom) break;
-            console.log(`[Presence] proximity_redirect from=${u.user_id} target=${targetId} room=${existingRoom}`);
-            await publishEvent({
-              type: 'proximity_redirect', targetUserId: targetId,
-              fromUserId: u.user_id, fromName: u.name, existingRoom,
-            });
+            const roomName = String(msg.roomName ?? '');
+            if (!roomName) break;
+            console.log(`[Presence] proximity_exit from=${u.user_id} room=${roomName}`);
+            // Broadcast an alle — Clients in diesem Raum trennen sich selbst
+            await publishEvent({ type: 'proximity_ended', roomName });
             break;
           }
 
