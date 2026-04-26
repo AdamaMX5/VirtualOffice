@@ -205,6 +205,8 @@ function routeEventLocally(event: Record<string, unknown>): void {
   }
 
   const excludeId = typeof event.user_id === 'string' ? event.user_id : undefined;
+  const recipients = [...connections.values()].filter((u) => !excludeId || u.user_id !== excludeId);
+  console.log(`[Presence] broadcast ${type} → ${recipients.length} clients [${recipients.map((u) => u.user_id).join(', ')}]`);
   broadcastLocal(event, excludeId);
 }
 
@@ -267,6 +269,7 @@ redisSub.subscribe(CHANNEL, (err) => {
 redisSub.on('message', (_ch: string, raw: string) => {
   try {
     const event = JSON.parse(raw) as Record<string, unknown>;
+    console.log(`[Presence] Redis→local: ${event.type}`);
     routeEventLocally(event);
   } catch (err) {
     console.warn('[Presence] Ungültiges Redis-Event:', err);
@@ -371,12 +374,13 @@ export function attachPresenceWs(server: Server): void {
           }
 
           case 'proximity_enter': {
-            // Nur eingeloggte (nicht Gast, nicht Bot) dürfen Calls initiieren
-            if (u.user_id.startsWith('g_') || u.user_id.startsWith('bot_')) break;
+            if (u.user_id.startsWith('g_') || u.user_id.startsWith('bot_')) {
+              console.warn(`[Presence] proximity_enter ABGEWIESEN — user_id=${u.user_id} ist Gast/Bot`);
+              break;
+            }
             const roomName = String(msg.roomName ?? '');
-            if (!roomName) break;
-            console.log(`[Presence] proximity_enter from=${u.user_id} room=${roomName}`);
-            // Broadcast an alle — jeder Client prüft selbst ob er nah genug ist
+            if (!roomName) { console.warn('[Presence] proximity_enter ohne roomName'); break; }
+            console.log(`[Presence] proximity_enter from=${u.user_id} (${u.name}) room=${roomName} connections=${connections.size}`);
             await publishEvent({ type: 'proximity_call', fromUserId: u.user_id, fromName: u.name, roomName });
             break;
           }
