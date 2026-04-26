@@ -41,6 +41,18 @@ export async function uploadAndSaveMeetingBg(file: File): Promise<string> {
   return url;
 }
 
+/** Wählt ein bereits hochgeladenes Bild als Hintergrund (kein Upload). */
+export async function selectMeetingBg(url: string): Promise<void> {
+  const { bgObjectId, setBgUrl, setBgObjectId } = useMeetingStore.getState();
+  setBgUrl(url);
+  if (bgObjectId) {
+    await patchObject(COLLECTION, bgObjectId, { backgroundUrl: url });
+  } else {
+    const doc = await createObject(COLLECTION, { backgroundUrl: url }, { room: ROOM_REF });
+    setBgObjectId(doc._id);
+  }
+}
+
 /** Entfernt den Hintergrund (setzt null im ObjectService und Store). */
 export async function clearMeetingBg(): Promise<void> {
   const { bgObjectId, setBgUrl } = useMeetingStore.getState();

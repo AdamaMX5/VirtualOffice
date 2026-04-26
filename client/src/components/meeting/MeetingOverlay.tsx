@@ -11,7 +11,8 @@ import { useMeetingStore } from '../../model/stores/meetingStore';
 import { getRoom } from '../../hooks/useLiveKit';
 import { useRecording } from '../../hooks/useRecording';
 import { presenceSend } from '../../hooks/usePresence';
-import { loadMeetingBg, uploadAndSaveMeetingBg, clearMeetingBg } from '../../services/meetingService';
+import { loadMeetingBg } from '../../services/meetingService';
+import BgPicker from './BgPicker';
 
 // ── Grid-Berechnung ───────────────────────────────────────────────────────────
 
@@ -237,34 +238,13 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
   const bgUrl           = useMeetingStore((s) => s.bgUrl);
   const { isRecording, startRecording, stopRecording, tabHidden } = useRecording();
 
-  const bgInputRef  = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
+  const [showBgPicker, setShowBgPicker] = useState(false);
 
   // Hintergrundbild beim Öffnen laden (falls noch nicht im Store)
   useEffect(() => {
     if (!useMeetingStore.getState().bgObjectId) {
       loadMeetingBg();
     }
-  }, []);
-
-  const handleBgUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-    setUploading(true);
-    try {
-      const url = await uploadAndSaveMeetingBg(file);
-      presenceSend({ type: 'meeting_bg', backgroundUrl: url });
-    } catch (err) {
-      console.error('[Meeting] Hintergrund-Upload fehlgeschlagen:', err);
-    } finally {
-      setUploading(false);
-    }
-  }, []);
-
-  const handleClearBg = useCallback(async () => {
-    await clearMeetingBg();
-    presenceSend({ type: 'meeting_bg', backgroundUrl: null });
   }, []);
 
   const handleClose = useCallback(() => {
@@ -309,14 +289,10 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
       padding: '1.5%',
       boxSizing: 'border-box',
     }}>
-      {/* Versteckter File-Input für Hintergrundbild */}
-      <input
-        ref={bgInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={handleBgUpload}
-      />
+      {/* BgPicker */}
+      {showBgPicker && (
+        <BgPicker currentUrl={bgUrl} onClose={() => setShowBgPicker(false)} />
+      )}
       {/* Eigene Kachel zuerst */}
       <MeetingTile participant={room.localParticipant} isLocal speakerEnabled={speakerEnabled} />
 
@@ -373,18 +349,12 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
 
         {/* Hintergrundbild */}
         <button
-          onClick={() => bgInputRef.current?.click()}
-          style={{ ...btnBase, opacity: uploading ? 0.5 : 1 }}
-          disabled={uploading}
-          title="Hintergrundbild hochladen (für alle Teilnehmer)"
+          onClick={() => setShowBgPicker(true)}
+          style={btnBase}
+          title="Hintergrundbild wählen oder hochladen"
         >
-          {uploading ? '⏳ Lädt...' : bgUrl ? '🖼 Hintergrund ändern' : '🖼 Hintergrund'}
+          {bgUrl ? '🖼 Hintergrund ändern' : '🖼 Hintergrund'}
         </button>
-        {bgUrl && (
-          <button onClick={handleClearBg} style={btnBase} title="Hintergrund für alle entfernen">
-            ✕ Hintergrund
-          </button>
-        )}
 
         {/* Nachrichten-Button */}
         <button
