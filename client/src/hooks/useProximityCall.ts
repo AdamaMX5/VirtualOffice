@@ -259,7 +259,6 @@ export function useProximityCall() {
           if (d < closestDist) { closestDist = d; closestId = userId; }
         }
 
-        console.log(`[ProxCall] nächster User: ${closestId} dist=${closestDist.toFixed(2)} ENTER=${PROXIMITY_ENTER} selfMoved=${selfMoved}`);
         if (closestId && closestDist < PROXIMITY_ENTER) {
           const partner  = remoteUsers[closestId];
           const roomName = 'prox_' + id;

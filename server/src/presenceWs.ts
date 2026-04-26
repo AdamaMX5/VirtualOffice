@@ -205,8 +205,11 @@ function routeEventLocally(event: Record<string, unknown>): void {
   }
 
   const excludeId = typeof event.user_id === 'string' ? event.user_id : undefined;
-  const recipients = [...connections.values()].filter((u) => !excludeId || u.user_id !== excludeId);
-  console.log(`[Presence] broadcast ${type} → ${recipients.length} clients [${recipients.map((u) => u.user_id).join(', ')}]`);
+  // user_moved ist hochfrequent — nicht loggen
+  if (type !== 'user_moved') {
+    const recipients = [...connections.values()].filter((u) => !excludeId || u.user_id !== excludeId);
+    console.log(`[Presence] broadcast ${type} → ${recipients.length} clients [${recipients.map((u) => u.user_id).join(', ')}]`);
+  }
   broadcastLocal(event, excludeId);
 }
 
@@ -271,7 +274,7 @@ redisSub.subscribe(CHANNEL, (err) => {
 redisSub.on('message', (_ch: string, raw: string) => {
   try {
     const event = JSON.parse(raw) as Record<string, unknown>;
-    console.log(`[Presence] Redis→local: ${event.type}`);
+    if (event.type !== 'user_moved') console.log(`[Presence] Redis→local: ${event.type}`);
     routeEventLocally(event);
   } catch (err) {
     console.warn('[Presence] Ungültiges Redis-Event:', err);

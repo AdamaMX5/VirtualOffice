@@ -71,9 +71,11 @@ export function usePresence() {
 
     ws.onmessage = (e: MessageEvent<string>) => {
       const data = JSON.parse(e.data) as WsInbound;
-      console.log('[WS in]', data.type, data.type === 'snapshot'
-        ? `(${data.users.length} users: ${data.users.map(u => u.user_id).join(', ')})`
-        : 'user_id' in data ? data.user_id : '');
+      if (data.type !== 'user_moved') {
+        console.log('[WS in]', data.type, data.type === 'snapshot'
+          ? `(${data.users.length} users: ${data.users.map(u => u.user_id).join(', ')})`
+          : 'user_id' in data ? data.user_id : '');
+      }
       switch (data.type) {
         case 'snapshot':
           applySnapshot(data.users);
