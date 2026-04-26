@@ -23,7 +23,8 @@ export function usePresence() {
   const { jwt, authStatus } = useAuthStore();
   const { setStatus } = useAuthStore();
   const { applySnapshot, addOrUpdateUser, moveUser, removeUser, setWsStatus, setReconnectDelay, resetUsers } = usePresenceStore();
-  const name = usePlayerStore((s) => s.name);
+  const name   = usePlayerStore((s) => s.name);
+  const userId = useAuthStore((s) => s.userId);
 
   const socketRef       = useRef<WebSocket | null>(null);
   const reconnectTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -31,20 +32,23 @@ export function usePresence() {
   const intentional     = useRef(false);
   const nameRef         = useRef(name);
   const jwtRef          = useRef(jwt);
+  const userIdRef       = useRef(userId);
 
-  nameRef.current = name;
-  jwtRef.current  = jwt;
+  nameRef.current   = name;
+  jwtRef.current    = jwt;
+  userIdRef.current = userId;
 
   const connect = useCallback(() => {
     if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
 
-    intentional.current = false;    // new connection is not closed correctly
+    intentional.current = false;
     setWsStatus('connecting');
     setStatus('connecting');
 
-    const token = jwtRef.current;
-    const wsUrl = token
-      ? `${WS_PATH}?token=${token}`
+    const token  = jwtRef.current;
+    const uid    = userIdRef.current;
+    const wsUrl  = token
+      ? `${WS_PATH}?token=${token}${uid ? `&userId=${encodeURIComponent(uid)}` : ''}`
       : WS_PATH;
 
     console.log('[WS] connect() aufgerufen → url:', wsUrl, '| name:', nameRef.current, '| jwt vorhanden:', !!token);
@@ -156,9 +160,12 @@ export function usePresence() {
 
   /** Sendet eine Nachricht, falls die Verbindung offen ist */
   const send = useCallback((msg: WsOutbound) => {
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify(msg));
+    const state = socketRef.current?.readyState;
+    if (state !== WebSocket.OPEN) {
+      console.warn('[WS] send BLOCKIERT — readyState:', state, 'msg:', (msg as unknown as Record<string, unknown>).type);
+      return;
     }
+    socketRef.current!.send(JSON.stringify(msg));
   }, []);
 
   // Singleton registrieren

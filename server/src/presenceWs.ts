@@ -247,9 +247,11 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
-function resolveUserId(token?: string | null, botId?: string | null, isLocalhost = false): string {
+function resolveUserId(token?: string | null, userIdParam?: string | null, botId?: string | null, isLocalhost = false): string {
   if (isLocalhost && botId) return botId;
   if (token) {
+    // Client kennt seine ID aus dem Login-Response (data.id); JWT-sub ist oft die E-Mail
+    if (userIdParam?.trim()) return userIdParam.trim();
     const payload = decodeJwtPayload(token) as Record<string, unknown> | null;
     const id = payload
       ? String(payload.id ?? payload.userId ?? payload.sub ?? '')
@@ -293,12 +295,13 @@ export function attachPresenceWs(server: Server): void {
   console.log('[Presence] WebSocket-Server initialisiert auf /ws');
 
   wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
-    const url     = new URL(req.url ?? '', 'http://x');
-    const token   = url.searchParams.get('token');
-    const botId   = url.searchParams.get('bot_id');
-    const remote  = req.socket.remoteAddress ?? 'unknown';
-    const isLocal = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
-    const userId  = resolveUserId(token, botId, isLocal);
+    const url          = new URL(req.url ?? '', 'http://x');
+    const token        = url.searchParams.get('token');
+    const userIdParam  = url.searchParams.get('userId');
+    const botId        = url.searchParams.get('bot_id');
+    const remote       = req.socket.remoteAddress ?? 'unknown';
+    const isLocal      = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+    const userId       = resolveUserId(token, userIdParam, botId, isLocal);
 
     console.log(`[Presence] connect  userId=${userId} remote=${remote} isLocal=${isLocal} botId=${botId ?? '-'} redis=${redisReady ? 'ok' : 'offline'}`);
 
