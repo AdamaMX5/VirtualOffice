@@ -1,6 +1,7 @@
 import React from 'react';
 import { useCameraStore } from '../../model/stores/cameraStore';
 
+
 const isTouchDevice =
   typeof window !== 'undefined' &&
   ('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -44,6 +45,10 @@ const ControlsHint = () => {
       <span style={kbdStyle}>F</span> — Kamera{' '}
       <span style={{ color: follow ? 'rgba(125,211,252,0.8)' : 'rgba(255,255,255,0.35)' }}>
         {follow ? '● folgt' : '○ frei'}
+      </span>
+      <br />
+      <span style={{ color: 'rgba(255,255,255,0.18)', fontFamily: 'monospace', fontSize: 9 }}>
+        v{__APP_VERSION__}
       </span>
     </div>
   );

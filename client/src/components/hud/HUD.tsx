@@ -192,9 +192,6 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
           Abmelden
         </button>
       )}
-      <div style={{ ...badgeStyle, fontSize: 10, color: 'rgba(255,255,255,0.25)', fontFamily: 'monospace' }}>
-        v{__APP_VERSION__}
-      </div>
     </div>
     </>
   );
