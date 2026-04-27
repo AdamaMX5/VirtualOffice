@@ -99,11 +99,14 @@ async function joinProxRoom(
 
     await room.connect(url, token, FORCE_TURN ? { rtcConfig: { iceTransportPolicy: 'relay' } } : {});
 
-    const focused = !document.hidden;
-    await room.localParticipant.setMicrophoneEnabled(focused)
-      .catch((e) => console.warn('[ProxCall] Mic aktivieren fehlgeschlagen:', e));
-    await room.localParticipant.setCameraEnabled(focused)
-      .catch((e) => console.warn('[ProxCall] Kamera aktivieren fehlgeschlagen:', e));
+    // Kamera/Mic nur aktivieren wenn Tab beim Join bereits fokussiert ist —
+    // kein automatisches De-/Aktivieren bei späterem Fokuswechsel
+    if (!document.hidden) {
+      await room.localParticipant.setMicrophoneEnabled(true)
+        .catch((e) => console.warn('[ProxCall] Mic aktivieren fehlgeschlagen:', e));
+      await room.localParticipant.setCameraEnabled(true)
+        .catch((e) => console.warn('[ProxCall] Kamera aktivieren fehlgeschlagen:', e));
+    }
 
     setActiveCall({ ownerUserId, partnerName, roomName });
 
@@ -119,16 +122,7 @@ async function joinProxRoom(
       room.on(RoomEvent.TrackUnsubscribed,       bumpTrack);
     }
 
-    const onVisibility = async () => {
-      if (!_proxRoom) return;
-      const isFocused = !document.hidden;
-      await _proxRoom.localParticipant.setMicrophoneEnabled(isFocused).catch(() => {});
-      await _proxRoom.localParticipant.setCameraEnabled(isFocused).catch(() => {});
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-
     room.on(RoomEvent.Disconnected, () => {
-      document.removeEventListener('visibilitychange', onVisibility);
       if (_proxRoom === room) {
         _proxRoom     = null;
         _proxRoomName = null;

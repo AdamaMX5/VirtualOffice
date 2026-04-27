@@ -32,6 +32,7 @@ import { redisPub, redisSub } from './redis';
 
 const ROOM        = 'main';
 const CHANNEL     = `vo:${ROOM}:events`;
+const INSTANCE_ID = Math.random().toString(36).slice(2, 10); // eindeutige ID dieser Server-Instanz
 const userKey     = (id: string) => `vo:${ROOM}:users:${id}`;
 const lastPosKey  = (id: string) => `vo:${ROOM}:lastpos:${id}`;
 const USER_TTL    = 3600;     // 1 Stunde — Sitzungs-Key
@@ -213,17 +214,23 @@ function routeEventLocally(event: Record<string, unknown>): void {
   broadcastLocal(event, excludeId);
 }
 
-/** Publish via Redis — bei Fehler/Offline: direkt lokal routen. */
+/**
+ * Verteilt ein Event:
+ * 1. Immer sofort an lokale Clients dieser Instanz (kein Redis-Umweg)
+ * 2. Falls Redis verfügbar: zusätzlich an andere Server-Instanzen publizieren
+ *    (Event wird mit INSTANCE_ID getaggt; Subscriber ignoriert eigene Events)
+ */
 async function publishEvent(event: object): Promise<void> {
+  // Lokale Clients sofort bedienen — unabhängig von Redis
+  routeEventLocally(event as Record<string, unknown>);
+
   if (redisReady) {
     try {
-      await redisPub.publish(CHANNEL, JSON.stringify(event));
-      return;
+      await redisPub.publish(CHANNEL, JSON.stringify({ ...event, _src: INSTANCE_ID }));
     } catch (err) {
-      console.warn('[Presence] Redis-Publish fehlgeschlagen, fallback lokal:', (err as Error).message);
+      console.warn('[Presence] Redis-Publish fehlgeschlagen (lokale Clients bereits bedient):', (err as Error).message);
     }
   }
-  routeEventLocally(event as Record<string, unknown>);
 }
 
 // ── WS-Helpers ────────────────────────────────────────────────────────────────
@@ -274,8 +281,11 @@ redisSub.subscribe(CHANNEL, (err) => {
 redisSub.on('message', (_ch: string, raw: string) => {
   try {
     const event = JSON.parse(raw) as Record<string, unknown>;
-    if (event.type !== 'user_moved') console.log(`[Presence] Redis→local: ${event.type}`);
-    routeEventLocally(event);
+    // Eigene Events ignorieren — lokale Clients wurden bereits in publishEvent bedient
+    if (event._src === INSTANCE_ID) return;
+    const { _src: _, ...cleanEvent } = event; // _src nicht an Clients weitergeben
+    if (cleanEvent.type !== 'user_moved') console.log(`[Presence] Redis (Fremdinstanz): ${cleanEvent.type}`);
+    routeEventLocally(cleanEvent);
   } catch (err) {
     console.warn('[Presence] Ungültiges Redis-Event:', err);
   }
