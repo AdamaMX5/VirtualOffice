@@ -324,7 +324,6 @@ export function attachPresenceWs(server: Server): void {
 
     try {
       const snapshot = await getSnapshot(userId);
-      console.log(`[Presence] snapshot → userId=${userId} count=${snapshot.length} ids=[${snapshot.map(u => u.user_id).join(', ')}]`);
       sendTo(ws, { type: 'snapshot', users: snapshot });
     } catch (err) {
       console.error('[Presence] Snapshot-Fehler:', (err as Error).message);
@@ -390,6 +389,7 @@ export function attachPresenceWs(server: Server): void {
           }
 
           case 'proximity_enter': {
+            console.log("Proximity_enter Message:"+ msg);
             if (u.user_id.startsWith('g_') || u.user_id.startsWith('bot_')) {
               console.warn(`[Presence] proximity_enter ABGEWIESEN — user_id=${u.user_id} ist Gast/Bot`);
               break;
@@ -424,6 +424,9 @@ export function attachPresenceWs(server: Server): void {
             if (text) await publishEvent({ type: 'chat', userId: u.user_id, text });
             break;
           }
+
+          default:
+            console.warn(`[Presence] Unbekannter Nachrichtentyp: "${msg.type}" von userId=${u.user_id}`, msg);
         }
       } catch (err) {
         console.warn('[Presence] Nachrichten-Fehler:', (err as Error).message);
