@@ -47,7 +47,7 @@ const ControlsHint = () => {
         {follow ? '● folgt' : '○ frei'}
       </span>
       <br />
-      <span style={{ color: 'rgba(255,255,255,0.18)', fontFamily: 'monospace', fontSize: 9 }}>
+      <span style={{ fontFamily: 'monospace', fontSize: 9 }}>
         v{__APP_VERSION__}
       </span>
     </div>
