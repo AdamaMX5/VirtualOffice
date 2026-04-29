@@ -258,8 +258,7 @@ export function useProximityCall() {
           const roomName = 'prox_' + id;
           console.log(`[ProxCall] Initiiere Call → room=${roomName} target=${closestId}`);
           activeRef.current = { ownerUserId: id, roomName, isOwner: true };
-          // Disguise als move wegen nginx-Filterung (Debug)
-          presenceSend({ type: 'move', x: wx, y: wy, _p: roomName });
+          presenceSend({ type: 'proximity_enter', roomName });
           joinProxRoom(roomName, id, partner.name, identityRef.current, nameRef.current);
         }
 

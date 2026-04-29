@@ -38,11 +38,11 @@ export type WsInbound = WsSnapshot | WsJoined | WsMoved | WsLeft | WsNewMessage 
 
 // ── WebSocket-Nachrichten (ausgehend zum PresenceService) ─────────────────────
 export interface WsMsgSetName      { type: 'set_name';      name: string }
-export interface WsMsgMove         { type: 'move';          x: number; y: number; _p?: string }
+export interface WsMsgMove         { type: 'move';          x: number; y: number }
 export interface WsMsgRefreshToken { type: 'refresh_token'; token: string }
 export interface WsMsgNotifyUser   { type: 'notify_user';   targetUserId: string }
 export interface WsMsgChat         { type: 'chat';          text: string }
-export interface WsMsgProximityEnter { type: 'proximity_enter'; roomName: string, prio: number}
+export interface WsMsgProximityEnter { type: 'proximity_enter'; roomName: string }
 export interface WsMsgProximityExit  { type: 'proximity_exit';  roomName: string }
 export interface WsMsgMeetingBg      { type: 'meeting_bg';      backgroundUrl: string | null }
 export type WsOutbound = WsMsgSetName | WsMsgMove | WsMsgRefreshToken | WsMsgNotifyUser | WsMsgChat | WsMsgProximityEnter | WsMsgProximityExit | WsMsgMeetingBg;
