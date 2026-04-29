@@ -103,12 +103,28 @@ export function useLiveKit() {
       S().setStatus('connected');
       S().setRoomName(roomName);
       syncParticipants();
-
-      await room.localParticipant.setMicrophoneEnabled(true);
-      await room.localParticipant.setCameraEnabled(true);
-      S().setMicEnabled(true);
-      S().setCamEnabled(true);
       _connecting = false;
+
+      // Mic/Kamera getrennt aktivieren — Gerätefehler sollen den Meeting-Join nicht abbrechen
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+        S().setMicEnabled(true);
+      } catch (e) {
+        console.warn('[LiveKit] Mikrofon aktivieren fehlgeschlagen:', e);
+      }
+      try {
+        await room.localParticipant.setCameraEnabled(true);
+        S().setCamEnabled(true);
+      } catch (e) {
+        console.warn('[LiveKit] Kamera (Standard) fehlgeschlagen, versuche ohne deviceId:', e);
+        // Fallback: gecachte deviceId ignorieren
+        try {
+          await room.localParticipant.setCameraEnabled(true, { deviceId: undefined });
+          S().setCamEnabled(true);
+        } catch (e2) {
+          console.warn('[LiveKit] Kamera konnte nicht aktiviert werden:', e2);
+        }
+      }
     } catch (err) {
       _failedConnect = true;
       await room?.disconnect().catch(() => {});
