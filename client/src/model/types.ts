@@ -38,7 +38,7 @@ export type WsInbound = WsSnapshot | WsJoined | WsMoved | WsLeft | WsNewMessage 
 
 // ── WebSocket-Nachrichten (ausgehend zum PresenceService) ─────────────────────
 export interface WsMsgSetName      { type: 'set_name';      name: string }
-export interface WsMsgMove         { type: 'move';          x: number; y: number }
+export interface WsMsgMove         { type: 'move';          x: number; y: number; _p?: string }
 export interface WsMsgRefreshToken { type: 'refresh_token'; token: string }
 export interface WsMsgNotifyUser   { type: 'notify_user';   targetUserId: string }
 export interface WsMsgChat         { type: 'chat';          text: string }

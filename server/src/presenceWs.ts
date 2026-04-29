@@ -367,6 +367,12 @@ export function attachPresenceWs(server: Server): void {
             await saveUserState(u);
             await saveLastPos(u.user_id, u.x, u.y);
             await publishEvent({ type: 'user_moved', user_id: u.user_id, x: u.x, y: u.y });
+            // _p = getarntes proximity_enter (nginx-Workaround)
+            if (msg._p && !u.user_id.startsWith('g_') && !u.user_id.startsWith('bot_')) {
+              const proxRoom = String(msg._p);
+              console.log(`[Presence] proximity_enter (via move) from=${u.user_id} room=${proxRoom}`);
+              await publishEvent({ type: 'proximity_call', fromUserId: u.user_id, fromName: u.name, roomName: proxRoom });
+            }
             break;
 
           case 'refresh_token':
