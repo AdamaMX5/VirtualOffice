@@ -27,7 +27,7 @@ export function presenceSend(msg: WsOutbound): void {
 const MAX_DELAY = 10_000;
 
 export function usePresence() {
-  const { jwt, authStatus } = useAuthStore();
+  const { jwt, authStatus, email } = useAuthStore();
   const { setStatus } = useAuthStore();
   const { applySnapshot, addOrUpdateUser, moveUser, removeUser, setWsStatus, setReconnectDelay, resetUsers } = usePresenceStore();
   const name   = usePlayerStore((s) => s.name);
@@ -40,10 +40,12 @@ export function usePresence() {
   const nameRef         = useRef(name);
   const jwtRef          = useRef(jwt);
   const userIdRef       = useRef(userId);
+  const emailRef        = useRef(email);
 
   nameRef.current   = name;
   jwtRef.current    = jwt;
   userIdRef.current = userId;
+  emailRef.current  = email;
 
   const connect = useCallback(() => {
     if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
@@ -68,10 +70,13 @@ export function usePresence() {
       console.log('[WS] onopen — verbunden mit', wsUrl);
 
       if (!token) {
-        // Gast: Namen senden
         ws.send(JSON.stringify({ type: 'set_name', name: nameRef.current }));
         setStatus('connected_guest');
       } else {
+        const displayName = (nameRef.current && nameRef.current !== '...')
+          ? nameRef.current
+          : emailRef.current;
+        ws.send(JSON.stringify({ type: 'set_name', name: displayName }));
         setStatus('connected_auth');
       }
     };
