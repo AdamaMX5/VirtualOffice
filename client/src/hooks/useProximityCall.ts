@@ -230,6 +230,8 @@ export function useProximityCall() {
         .catch((e) => console.warn('[ProxCall] Mic aktivieren fehlgeschlagen:', e));
       await _proxRoom.localParticipant.setCameraEnabled(true)
         .catch((e) => console.warn('[ProxCall] Kamera aktivieren fehlgeschlagen:', e));
+      // Track braucht einen Moment bis er streamt — Re-Attach erzwingen
+      setTimeout(() => LK().bumpTrackVersion(), 300);
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
