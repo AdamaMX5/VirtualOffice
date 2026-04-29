@@ -99,8 +99,8 @@ async function joinProxRoom(
 
     await room.connect(url, token, FORCE_TURN ? { rtcConfig: { iceTransportPolicy: 'relay' } } : {});
 
-    // Kamera/Mic nur aktivieren wenn Tab beim Join bereits fokussiert ist —
-    // kein automatisches De-/Aktivieren bei späterem Fokuswechsel
+    // Kamera/Mic sofort aktivieren wenn Tab fokussiert — sonst übernimmt
+    // der visibilitychange-Listener beim nächsten Tab-Wechsel
     if (!document.hidden) {
       await room.localParticipant.setMicrophoneEnabled(true)
         .catch((e) => console.warn('[ProxCall] Mic aktivieren fehlgeschlagen:', e));
@@ -219,6 +219,20 @@ export function useProximityCall() {
       }
     });
     return () => setProxEventHandler(null);
+  }, []);
+
+  // ── Kamera/Mic aktivieren wenn Tab den Fokus bekommt und Prox-Call läuft ───
+  useEffect(() => {
+    const onVisibility = async () => {
+      if (document.hidden || !_proxRoom) return;
+      console.log('[ProxCall] Tab fokussiert — aktiviere Kamera/Mic im laufenden Prox-Call');
+      await _proxRoom.localParticipant.setMicrophoneEnabled(true)
+        .catch((e) => console.warn('[ProxCall] Mic aktivieren fehlgeschlagen:', e));
+      await _proxRoom.localParticipant.setCameraEnabled(true)
+        .catch((e) => console.warn('[ProxCall] Kamera aktivieren fehlgeschlagen:', e));
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
   // ── Proximity-Erkennungs-Loop ──────────────────────────────────────────────
