@@ -42,7 +42,7 @@ export interface WsMsgMove         { type: 'move';          x: number; y: number
 export interface WsMsgRefreshToken { type: 'refresh_token'; token: string }
 export interface WsMsgNotifyUser   { type: 'notify_user';   targetUserId: string }
 export interface WsMsgChat         { type: 'chat';          text: string }
-export interface WsMsgProximityEnter { type: 'proximity_enter'; roomName: string }
+export interface WsMsgProximityEnter { type: 'proximity_enter'; roomName: string, prio: number}
 export interface WsMsgProximityExit  { type: 'proximity_exit';  roomName: string }
 export interface WsMsgMeetingBg      { type: 'meeting_bg';      backgroundUrl: string | null }
 export type WsOutbound = WsMsgSetName | WsMsgMove | WsMsgRefreshToken | WsMsgNotifyUser | WsMsgChat | WsMsgProximityEnter | WsMsgProximityExit | WsMsgMeetingBg;

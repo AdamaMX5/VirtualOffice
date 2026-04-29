@@ -256,9 +256,10 @@ export function useProximityCall() {
         if (closestId && closestDist < PROXIMITY_ENTER) {
           const partner  = remoteUsers[closestId];
           const roomName = 'prox_' + id;
+          const prio: number = Math.floor(Math.random() * 1000);
           console.log(`[ProxCall] Initiiere Call → room=${roomName} target=${closestId}`);
           activeRef.current = { ownerUserId: id, roomName, isOwner: true };
-          presenceSend({ type: 'proximity_enter', roomName });
+          presenceSend({ type: 'proximity_enter', roomName, prio});
           joinProxRoom(roomName, id, partner.name, identityRef.current, nameRef.current);
         }
 

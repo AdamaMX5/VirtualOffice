@@ -14,7 +14,14 @@ let _wsSend: ((msg: WsOutbound) => void) | null = null;
 
 /** Sendet eine Nachricht über den Presence-WebSocket von überall im Code. */
 export function presenceSend(msg: WsOutbound): void {
-  _wsSend?.(msg);
+  if (_wsSend) {
+    _wsSend(msg);
+    if(msg.type == "proximity_enter"){
+      console.info("Proxi Call sended: "+ msg);
+    }
+  } else {
+    console.warn('[ProxCall] presenceSend fehlgeschlagen — _wsSend nicht gesetzt (keine WS-Verbindung?)', msg.type);
+  }
 }
 
 const MAX_DELAY = 10_000;
