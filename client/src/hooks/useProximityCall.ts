@@ -27,6 +27,7 @@ import { PROXIMITY_ENTER, PROXIMITY_EXIT } from '../model/constants';
 
 let _proxRoom:     Room   | null = null;
 let _proxRoomName: string | null = null;
+let _proxIsOwner:  boolean       = false;
 
 export function getProxRoom(): Room | null { return _proxRoom; }
 
@@ -148,6 +149,7 @@ export async function leaveProxRoom(): Promise<void> {
   const room = _proxRoom;
   _proxRoom     = null;
   _proxRoomName = null;
+  _proxIsOwner  = false;
   setActiveCall(null);
   if (LK().isProxCall) {
     LK().setIsProxCall(false);
@@ -156,6 +158,15 @@ export async function leaveProxRoom(): Promise<void> {
   }
   await room?.disconnect().catch(() => {});
   console.log('[ProxCall] Getrennt');
+}
+
+/** Vollständiger Cleanup inkl. proximity_exit — für externen Aufruf (z.B. Meeting-Join). */
+export async function hangUpProxCall(): Promise<void> {
+  if (!_proxRoom) return;
+  if (_proxIsOwner && _activeCall) {
+    presenceSend({ type: 'proximity_exit', roomName: _activeCall.roomName });
+  }
+  await leaveProxRoom();
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -257,6 +268,13 @@ export function useProximityCall() {
       const remoteUsers = usePresenceStore.getState().remoteUsers;
       const active = activeRef.current;
 
+      // Extern beendet (z.B. Meeting-Join) → State bereinigen
+      if (active && !_proxRoom) {
+        activeRef.current = null;
+        _proxIsOwner = false;
+        return;
+      }
+
       if (!active) {
         // Nur initiieren wenn wir uns selbst bewegt haben
         if (!selfMoved) return;
@@ -274,6 +292,7 @@ export function useProximityCall() {
           const roomName = 'prox_' + id;
           console.log(`[ProxCall] Initiiere Call → room=${roomName} target=${closestId}`);
           activeRef.current = { ownerUserId: id, roomName, isOwner: true };
+          _proxIsOwner = true;
           presenceSend({ type: 'proximity_enter', roomName });
           joinProxRoom(roomName, id, partner.name, identityRef.current, nameRef.current);
         }

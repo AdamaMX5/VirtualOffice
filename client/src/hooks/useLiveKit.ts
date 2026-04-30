@@ -8,6 +8,7 @@ import { useLiveKitStore } from '../model/stores/liveKitStore';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useAuthStore } from '../model/stores/authStore';
 import { apiPost } from '../services/apiClient';
+import { hangUpProxCall } from './useProximityCall';
 
 // ── Module-level Room singleton ───────────────────────────────────────────────
 
@@ -56,6 +57,8 @@ export function useLiveKit() {
     if (now - _lastConnectAttempt < CONNECT_COOLDOWN_MS) return;
     _connecting         = true;
     _lastConnectAttempt = now;
+
+    await hangUpProxCall();
 
     S().setStatus('connecting');
     S().setError(null);
