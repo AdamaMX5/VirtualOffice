@@ -302,11 +302,15 @@ export function useProximityCall() {
 
     return () => {
       clearInterval(interval);
-      if (activeRef.current?.isOwner) {
-        presenceSend({ type: 'proximity_exit', roomName: activeRef.current.roomName });
+      // Bei Token-Refresh ist jwt im Store bereits aktualisiert → ProxCall nicht beenden
+      const stillLoggedIn = !!useAuthStore.getState().jwt;
+      if (!stillLoggedIn) {
+        if (activeRef.current?.isOwner) {
+          presenceSend({ type: 'proximity_exit', roomName: activeRef.current.roomName });
+        }
+        activeRef.current = null;
+        leaveProxRoom();
       }
-      activeRef.current = null;
-      leaveProxRoom();
     };
   }, [jwt]);
 
