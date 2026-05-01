@@ -393,10 +393,21 @@ export function attachPresenceWs(server: Server): void {
               console.warn(`[Presence] proximity_enter ABGEWIESEN — user_id=${u.user_id} ist Gast/Bot`);
               break;
             }
-            const roomName = String(msg.roomName ?? '');
+            const roomName  = String(msg.roomName  ?? '');
+            const userCount = Number(msg.userCount  ?? 1);
+            const prio      = Number(msg.prio       ?? 0);
             if (!roomName) { console.warn('[Presence] proximity_enter ohne roomName'); break; }
-            console.log(`[Presence] proximity_enter from=${u.user_id} (${u.name}) room=${roomName} connections=${connections.size}`);
-            await publishEvent({ type: 'proximity_call', fromUserId: u.user_id, fromName: u.name, roomName });
+            console.log(`[Presence] proximity_enter from=${u.user_id} (${u.name}) room=${roomName} count=${userCount} connections=${connections.size}`);
+            await publishEvent({ type: 'proximity_call', fromUserId: u.user_id, fromName: u.name, roomName, userCount, prio });
+            break;
+          }
+
+          case 'proximity_switch': {
+            const oldRoomName = String(msg.oldRoomName ?? '');
+            const newRoomName = String(msg.newRoomName ?? '');
+            if (!oldRoomName || !newRoomName) break;
+            console.log(`[Presence] proximity_switch from=${u.user_id} ${oldRoomName} → ${newRoomName}`);
+            await publishEvent({ type: 'proximity_switch', oldRoomName, newRoomName });
             break;
           }
 

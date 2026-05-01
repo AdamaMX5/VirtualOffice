@@ -28,8 +28,18 @@ import { PROXIMITY_ENTER, PROXIMITY_EXIT } from '../model/constants';
 let _proxRoom:     Room   | null = null;
 let _proxRoomName: string | null = null;
 let _proxIsOwner:  boolean       = false;
+let _proxPrio:     number        = 0;
 
 export function getProxRoom(): Room | null { return _proxRoom; }
+
+function proxUserCount(): number {
+  return _proxRoom ? _proxRoom.remoteParticipants.size + 1 : 1;
+}
+
+// Gibt true zurück wenn die eingehende Gruppe die eigene schlägt
+function beats(inCount: number, inPrio: number, myCount: number, myPrio: number): boolean {
+  return inCount > myCount || (inCount === myCount && inPrio > myPrio);
+}
 
 const LK = () => useLiveKitStore.getState();
 
@@ -195,30 +205,51 @@ export function useProximityCall() {
         const fromUserId = String(event.fromUserId ?? '');
         const fromName   = String(event.fromName   ?? '');
         const roomName   = String(event.roomName   ?? '');
-        console.log(`[ProxCall] proximity_call empfangen — from=${fromUserId} room=${roomName}`);
+        const userCount  = Number(event.userCount  ?? 1);
+        const prio       = Number(event.prio       ?? 0);
+        console.log(`[ProxCall] proximity_call empfangen — from=${fromUserId} room=${roomName} count=${userCount}`);
         if (!roomName) { console.log('[ProxCall] abgebrochen: kein roomName'); return; }
 
         // Eigene Broadcasts ignorieren
         const myId = getJwtUserId() || identityRef.current;
-        console.log(`[ProxCall] myId=${myId} fromUserId=${fromUserId} gleich=${fromUserId === myId}`);
         if (fromUserId === myId) return;
 
-        // Schon in einem Raum → ignorieren
-        console.log(`[ProxCall] bereits in Raum: proxRoom=${!!_proxRoom} activeRef=${!!activeRef.current}`);
-        if (_proxRoom || activeRef.current) return;
-
-        // Nur beitreten wenn wir nah genug am Initiator sind
+        // Nähe prüfen (gilt sowohl für Join als auch für Merge)
         const { wx, wy } = usePlayerStore.getState();
         const remoteUsers = usePresenceStore.getState().remoteUsers;
         const caller = remoteUsers[fromUserId];
-        console.log(`[ProxCall] caller im Store: ${!!caller} remoteUsers keys: [${Object.keys(remoteUsers).join(', ')}]`);
         if (!caller) return;
         const dist = Math.hypot(wx - caller.x, wy - caller.y);
-        console.log(`[ProxCall] Distanz zu caller: ${dist.toFixed(2)} PROXIMITY_ENTER=${PROXIMITY_ENTER}`);
         if (dist >= PROXIMITY_ENTER) return;
 
+        // ── Merge-Logik: bereits in einem Call ──────────────────────────────
+        if (_proxRoom || activeRef.current) {
+          if (!_proxRoom) return; // Raum wird noch aufgebaut
+          if (_proxRoomName === roomName) return; // bereits im selben Raum
+
+          const myCount = proxUserCount();
+          if (beats(userCount, prio, myCount, _proxPrio)) {
+            // Eingehende Gruppe gewinnt → wechseln
+            console.log(`[ProxCall] Merge: wechsle ${_proxRoomName} → ${roomName} (in:${userCount} > my:${myCount})`);
+            if (_proxIsOwner) {
+              presenceSend({ type: 'proximity_switch', oldRoomName: _proxRoomName!, newRoomName: roomName });
+            }
+            activeRef.current = { ownerUserId: fromUserId, roomName, isOwner: false };
+            _proxIsOwner = false;
+            await leaveProxRoom();
+            await joinProxRoom(roomName, fromUserId, fromName, identityRef.current, nameRef.current);
+          } else if (_proxIsOwner) {
+            // Wir gewinnen → Antwort senden damit die andere Seite wechselt
+            console.log(`[ProxCall] Merge: Antwort an ${fromUserId} — mein Raum größer (my:${myCount} >= in:${userCount})`);
+            presenceSend({ type: 'proximity_enter', roomName: _proxRoomName!, userCount: myCount, prio: _proxPrio });
+          }
+          return;
+        }
+
+        // ── Normaler Join ────────────────────────────────────────────────────
         console.log(`[ProxCall] Eingehend von ${fromName} (${fromUserId}), Raum: ${roomName}`);
         activeRef.current = { ownerUserId: fromUserId, roomName, isOwner: false };
+        _proxIsOwner = false;
         await joinProxRoom(roomName, fromUserId, fromName, identityRef.current, nameRef.current);
 
       } else if (event.type === 'proximity_ended') {
@@ -227,6 +258,18 @@ export function useProximityCall() {
           activeRef.current = null;
           await leaveProxRoom();
         }
+
+      } else if (event.type === 'proximity_switch') {
+        const oldRoomName = String(event.oldRoomName ?? '');
+        const newRoomName = String(event.newRoomName ?? '');
+        // Nur reagieren wenn wir Member (nicht Owner) des alten Raums sind
+        if (_proxRoomName !== oldRoomName || !activeRef.current || activeRef.current.isOwner) return;
+        console.log(`[ProxCall] proximity_switch: ${oldRoomName} → ${newRoomName}`);
+        const newOwnerId = newRoomName.startsWith('prox_') ? newRoomName.slice(5) : '';
+        const ownerInfo  = usePresenceStore.getState().remoteUsers[newOwnerId];
+        activeRef.current = { ownerUserId: newOwnerId, roomName: newRoomName, isOwner: false };
+        await leaveProxRoom();
+        await joinProxRoom(newRoomName, newOwnerId, ownerInfo?.name ?? '?', identityRef.current, nameRef.current);
       }
     });
     return () => setProxEventHandler(null);
@@ -290,10 +333,11 @@ export function useProximityCall() {
         if (closestId && closestDist < PROXIMITY_ENTER) {
           const partner  = remoteUsers[closestId];
           const roomName = 'prox_' + id;
-          console.log(`[ProxCall] Initiiere Call → room=${roomName} target=${closestId}`);
+          _proxPrio = Math.floor(Math.random() * 1_000_000);
+          console.log(`[ProxCall] Initiiere Call → room=${roomName} target=${closestId} prio=${_proxPrio}`);
           activeRef.current = { ownerUserId: id, roomName, isOwner: true };
           _proxIsOwner = true;
-          presenceSend({ type: 'proximity_enter', roomName });
+          presenceSend({ type: 'proximity_enter', roomName, userCount: 1, prio: _proxPrio });
           joinProxRoom(roomName, id, partner.name, identityRef.current, nameRef.current);
         }
 
