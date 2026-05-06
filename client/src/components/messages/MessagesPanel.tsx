@@ -47,6 +47,12 @@ interface ConvEntry {
   lastAt: string;
 }
 
+function isMessageable(userId: string, name: string): boolean {
+  if (userId.startsWith('bot_') || name.endsWith('_Bot')) return false;
+  if (userId.startsWith('g_')) return false;
+  return true;
+}
+
 function buildConversations(
   inbox: Message[],
   onlineUsers: Record<string, { name: string }>,
@@ -56,12 +62,14 @@ function buildConversations(
 
   for (const msg of inbox) {
     const otherId = msg.senderId === myId ? msg.recipientId : msg.senderId;
+    const otherName = onlineUsers[otherId]?.name ?? otherId;
+    if (!isMessageable(otherId, otherName)) continue;
     const existing = map.get(otherId);
     const isNewer  = !existing || msg.createdAt > existing.lastAt;
     if (!existing) {
       map.set(otherId, {
         userId:   otherId,
-        name:     onlineUsers[otherId]?.name ?? otherId,
+        name:     otherName,
         isOnline: !!onlineUsers[otherId],
         unread:   msg.recipientId === myId && !msg.readAt ? 1 : 0,
         lastBody: msg.body,
@@ -78,7 +86,7 @@ function buildConversations(
 
   // Online-User die noch keine Nachricht geschickt haben, hinzufügen
   for (const [uid, u] of Object.entries(onlineUsers)) {
-    if (uid !== myId && !map.has(uid)) {
+    if (uid !== myId && !map.has(uid) && isMessageable(uid, u.name)) {
       map.set(uid, {
         userId: uid, name: u.name, isOnline: true,
         unread: 0, lastBody: '', lastAt: '',
