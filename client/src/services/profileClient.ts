@@ -9,6 +9,7 @@ export interface UserProfile {
   lastName: string;
   department: string;
   avatarUrl: string;
+  calendarUrl: string;
 }
 
 interface ProfileDoc {

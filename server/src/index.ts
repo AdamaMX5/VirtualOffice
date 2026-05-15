@@ -9,6 +9,7 @@ import { config } from './config';
 import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxies/authProxy';
 import { attachPresenceWs } from './presenceWs';
 import { startReceptionBot, startAdminBot } from './presence';
+import { fetchCalendarEvents } from './calendarProxy';
 
 const app = express();
 
@@ -111,6 +112,20 @@ app.post('/api/livekit/egress/stop', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── Kalender-Proxy (CORS-Bypass für iCal/ICS-URLs) ───────────
+
+app.get('/api/calendar/events', async (req, res) => {
+  const { url, days } = req.query as { url?: string; days?: string };
+  if (!url) { res.status(400).json({ error: 'url fehlt' }); return; }
+  const parsedDays = days ? parseInt(days) : 14;
+  try {
+    const events = await fetchCalendarEvents(url, isNaN(parsedDays) ? 14 : parsedDays);
+    res.json({ events });
+  } catch (err) {
+    res.status(502).json({ error: String(err) });
   }
 });
 
