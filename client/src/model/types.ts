@@ -38,7 +38,7 @@ export interface WsMeetingBg       { type: 'meeting_bg';       backgroundUrl: st
 export type WsInbound = WsSnapshot | WsJoined | WsMoved | WsLeft | WsNewMessage | WsChatMessage | WsProximityCall | WsProximityEnded | WsProximitySwitch | WsMeetingBg;
 
 // ── WebSocket-Nachrichten (ausgehend zum PresenceService) ─────────────────────
-export interface WsMsgSetName        { type: 'set_name';        name: string }
+export interface WsMsgSetName        { type: 'set_name';        name: string; department?: string }
 export interface WsMsgMove           { type: 'move';            x: number; y: number }
 export interface WsMsgRefreshToken   { type: 'refresh_token';   token: string }
 export interface WsMsgNotifyUser     { type: 'notify_user';     targetUserId: string }

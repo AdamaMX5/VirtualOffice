@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Layer } from 'react-konva';
 import type KonvaType from 'konva';
 import { usePlayerStore } from '../../model/stores/playerStore';
@@ -6,6 +6,7 @@ import { usePresenceStore } from '../../model/stores/presenceStore';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useCameraStore } from '../../model/stores/cameraStore';
 import { useServiceStatusStore } from '../../model/stores/serviceStatusStore';
+import { useProfileStore } from '../../model/stores/profileStore';
 import { P } from '../../model/constants';
 import SmileyAvatar from '../avatars/SmileyAvatar';
 import ChatBubble from '../avatars/ChatBubble';
@@ -19,6 +20,18 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
   const remoteUsers  = usePresenceStore((s) => s.remoteUsers);
   const chatBubbles  = usePresenceStore((s) => s.chatBubbles);
   const openServiceStatus = useServiceStatusStore((s) => s.open);
+  const openProfile  = useProfileStore((s) => s.open);
+  const avatarUrl    = useProfileStore((s) => s.avatarUrl);
+
+  const [ownImgEl, setOwnImgEl] = useState<HTMLImageElement | null>(null);
+  useEffect(() => {
+    if (!avatarUrl) { setOwnImgEl(null); return; }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => setOwnImgEl(img);
+    img.onerror = () => setOwnImgEl(null);
+    img.src = avatarUrl;
+  }, [avatarUrl]);
   // trackVersion als Re-Render-Trigger wenn Video-Tracks sich ändern
   useLiveKitStore((s) => s.trackVersion);
 
@@ -81,10 +94,12 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
         name={name}
         isPlayer={true}
         animate={false}
+        profileImageEl={ownImgEl}
         draggable
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
+        onContextMenu={openProfile}
       />
 
       {/* Sprechblasen zuletzt → immer über allen Avataren */}

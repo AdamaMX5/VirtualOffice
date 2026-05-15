@@ -16,6 +16,7 @@ import MeetingOverlay from './meeting/MeetingOverlay';
 import FurniturePanel from './furniture/FurniturePanel';
 import MessagesPanel from './messages/MessagesPanel';
 import { usePresence } from '../hooks/usePresence';
+import { useProfile } from '../hooks/useProfile';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { useCamera } from '../hooks/useCamera';
 import { useTokenRefresh } from '../hooks/useTokenRefresh';
@@ -52,6 +53,7 @@ const OfficeCanvas = () => {
 
   // Polling + Echtzeit-Notifications (läuft dauerhaft)
   useMessaging();
+  useProfile();
 
   // Möbel einmalig beim Start laden — alle Räume, kein Filter
   useEffect(() => {

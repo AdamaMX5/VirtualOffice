@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Group, Circle, Shape, Text } from 'react-konva';
+import { Group, Circle, Shape, Text, Image as KonvaImage } from 'react-konva';
 import type Konva from 'konva';
 import { P } from '../../model/constants';
 
@@ -12,7 +12,9 @@ interface SmileyAvatarProps {
   animate?: boolean;  // true für Remote-User (Konva-Tween)
   animateDuration?: number; // Tween-Dauer in Sekunden (default 0.1)
   videoElement?: HTMLVideoElement | null;
+  profileImageEl?: HTMLImageElement | null;
   onClick?: () => void;
+  onContextMenu?: () => void;
   // Drag-to-Move (nur lokaler Spieler)
   draggable?: boolean;
   onDragStart?: () => void;
@@ -20,7 +22,7 @@ interface SmileyAvatarProps {
   onDragEnd?:  (e: Konva.KonvaEventObject<DragEvent>) => void;
 }
 
-const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false, animateDuration = 0.1, videoElement, onClick, draggable, onDragStart, onDragMove, onDragEnd }: SmileyAvatarProps) => {
+const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, animate = false, animateDuration = 0.1, videoElement, profileImageEl, onClick, onContextMenu, draggable, onDragStart, onDragMove, onDragEnd }: SmileyAvatarProps) => {
   const groupRef = useRef<Konva.Group>(null);
 
   // Initiale Position einmalig per Ref festhalten — so startet der Avatar
@@ -47,7 +49,8 @@ const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, 
       onDragMove={onDragMove}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      onMouseEnter={() => { document.body.style.cursor = onClick ? 'pointer' : draggable ? 'grab' : 'default'; }}
+      onContextMenu={onContextMenu ? (e) => { e.evt.preventDefault(); onContextMenu(); } : undefined}
+      onMouseEnter={() => { document.body.style.cursor = (onClick || onContextMenu) ? 'pointer' : draggable ? 'grab' : 'default'; }}
       onMouseLeave={() => { document.body.style.cursor = 'default'; }}
       onDragStart={draggable ? () => { document.body.style.cursor = 'grabbing'; onDragStart?.(); } : undefined}
     >
@@ -57,7 +60,6 @@ const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, 
       {videoElement ? (
         /* ── Video-Kreis-Modus (Radius 24, ragt über den Smiley-Ring hinaus) ── */
         <>
-          {/* Kreisförmiger Clip + Video mit objectFit:cover */}
           <Group clipFunc={(ctx) => { ctx.arc(0, 0, 24, 0, Math.PI * 2); }}>
             <Shape
               listening={false}
@@ -67,13 +69,24 @@ const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, 
                 const vw = v.videoWidth;
                 const vh = v.videoHeight;
                 if (!vw || !vh) return;
-                // objectFit: cover – kürzere Seite füllt den Durchmesser
                 const s = 48 / Math.min(vw, vh);
                 (ctx as any)._context.drawImage(v, -(vw * s) / 2, -(vh * s) / 2, vw * s, vh * s);
               }}
             />
           </Group>
-          {/* Rand-Ring über dem Video */}
+          <Circle
+            radius={24}
+            fill="transparent"
+            stroke={isPlayer ? '#ca8a04' : isBot ? '#16a34a' : '#2563eb'}
+            strokeWidth={2}
+          />
+        </>
+      ) : profileImageEl ? (
+        /* ── Profilbild-Kreis-Modus ── */
+        <>
+          <Group clipFunc={(ctx) => { ctx.arc(0, 0, 24, 0, Math.PI * 2); }}>
+            <KonvaImage image={profileImageEl} x={-24} y={-24} width={48} height={48} />
+          </Group>
           <Circle
             radius={24}
             fill="transparent"
