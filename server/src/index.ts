@@ -7,9 +7,10 @@ import { AccessToken, EgressClient, EncodedFileOutput, EncodedFileType } from 'l
 
 import { config } from './config';
 import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxies/authProxy';
-import { attachPresenceWs } from './presenceWs';
+import { attachPresenceWs, getConnectedUsers, decodeJwtPayload } from './presenceWs';
 import { startReceptionBot, startAdminBot } from './presence';
 import { fetchCalendarEvents } from './calendarProxy';
+import { createInviteToken } from './inviteTokens';
 
 const app = express();
 
@@ -113,6 +114,30 @@ app.post('/api/livekit/egress/stop', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
+});
+
+// ── Einladungs-Token ──────────────────────────────────────────
+
+app.post('/api/invite/create', (req, res) => {
+  const authHeader = req.headers.authorization;
+  const jwt = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!jwt) { res.status(401).json({ error: 'Nicht eingeloggt' }); return; }
+  const payload = decodeJwtPayload(jwt);
+  const inviterId = payload ? String(payload.id ?? payload.userId ?? payload.sub ?? '') : '';
+  if (!inviterId) { res.status(401).json({ error: 'Ungültiger Token' }); return; }
+  const inviterName = String((req.body as Record<string, unknown>).name ?? '');
+  const token = createInviteToken(inviterId, inviterName);
+  console.log(`[Invite] Token erstellt für ${inviterId} (${inviterName}): ${token}`);
+  res.json({ token });
+});
+
+// ── Online-Nutzer (für Empfangsmenü) ─────────────────────────
+
+app.get('/api/presence/users', (_req, res) => {
+  const users = getConnectedUsers()
+    .filter((u) => !u.user_id.startsWith('bot_') && !u.user_id.startsWith('g_'))
+    .map((u) => ({ userId: u.user_id, name: u.name, department: u.department }));
+  res.json({ users });
 });
 
 // ── Kalender-Proxy (CORS-Bypass für iCal/ICS-URLs) ───────────

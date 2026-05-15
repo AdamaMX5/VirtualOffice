@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { usePlayerStore } from '../../model/stores/playerStore';
 import { usePresenceStore } from '../../model/stores/presenceStore';
 import { useCameraStore } from '../../model/stores/cameraStore';
@@ -95,12 +95,35 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
   const liveKitStatus = useLiveKitStore((s) => s.status);
   const isProxCall    = useLiveKitStore((s) => s.isProxCall);
   const unreadTotal   = useMessageStore((s) => s.unreadTotal);
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   const jwt          = useAuthStore((s) => s.jwt);
   const isAuth       = jwt !== null;
   const showLoginBtn = !isAuth;
   const inMeeting    = currentRoom === 'Meetingraum';
   const meetingReady = inMeeting && liveKitStatus === 'connected' && !isProxCall;
+
+  const handleInviteGuest = async () => {
+    try {
+      const token = useAuthStore.getState().jwt;
+      const name  = usePlayerStore.getState().name;
+      const res   = await fetch('/api/invite/create', {
+        method:  'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ name }),
+      });
+      const { token: inviteToken } = await res.json() as { token: string };
+      const url = `${window.location.origin}?invite=${inviteToken}`;
+      await navigator.clipboard.writeText(url);
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2500);
+    } catch (err) {
+      console.error('[Invite] Fehler:', err);
+    }
+  };
+
+  // Suppress unused warning
+  void authStatus;
 
   return (
     <>
@@ -171,6 +194,18 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
               {unreadTotal > 99 ? '99+' : unreadTotal}
             </span>
           )}
+        </button>
+      )}
+      {isAuth && (
+        <button
+          style={{
+            ...meetingBtnStyle,
+            background: inviteCopied ? 'rgba(34,197,94,0.7)' : 'rgba(15,15,19,0.85)',
+            border: inviteCopied ? '1px solid rgba(34,197,94,0.8)' : '1px solid rgba(255,255,255,0.15)',
+          }}
+          onClick={handleInviteGuest}
+        >
+          {inviteCopied ? '✅ Link kopiert!' : '🔗 Gast einladen'}
         </button>
       )}
       {showLoginBtn && (

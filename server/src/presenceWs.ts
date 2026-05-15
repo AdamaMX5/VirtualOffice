@@ -27,6 +27,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import type { IncomingMessage } from 'http';
 import { redisPub, redisSub } from './redis';
+import { resolveInviteToken } from './inviteTokens';
 
 // ── Konstanten ────────────────────────────────────────────────────────────────
 
@@ -191,7 +192,10 @@ function routeEventLocally(event: Record<string, unknown>): void {
     let sent = false;
     for (const u of connections.values()) {
       if (u.user_id === targetId) {
-        const msg = type === 'notify_user'
+        // notify_user without callType → new_message (unread badge refresh)
+        // notify_user with callType  → forward as-is (ring / TTS / etc.)
+        const callType = event.callType;
+        const msg = (type === 'notify_user' && !callType)
           ? { type: 'new_message', senderId: event.senderId }
           : event;
         sendTo(u.ws, msg);
@@ -247,7 +251,7 @@ function broadcastLocal(msg: object, excludeUserId?: string): void {
   }
 }
 
-function decodeJwtPayload(token: string): Record<string, unknown> | null {
+export function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const part = token.split('.')[1];
     if (!part) return null;
@@ -312,9 +316,16 @@ export function attachPresenceWs(server: Server): void {
     const token        = url.searchParams.get('token');
     const userIdParam  = url.searchParams.get('userId');
     const botId        = url.searchParams.get('bot_id');
+    const inviteToken  = url.searchParams.get('invite');
     const remote       = req.socket.remoteAddress ?? 'unknown';
     const isLocal      = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
     const userId       = resolveUserId(token, userIdParam, botId, isLocal);
+
+    // Einladungs-Token auflösen: Einlader wird benachrichtigt wenn Gast beitritt
+    const pendingInvite = inviteToken ? resolveInviteToken(inviteToken) : null;
+    if (pendingInvite) {
+      console.log(`[Presence] Gast ${userId} kommt via Einladung von ${pendingInvite.inviterId}`);
+    }
 
     console.log(`[Presence] connect  userId=${userId} remote=${remote} isLocal=${isLocal} botId=${botId ?? '-'} redis=${redisReady ? 'ok' : 'offline'}`);
 
@@ -359,6 +370,17 @@ export function attachPresenceWs(server: Server): void {
               type: 'user_joined', user_id: u.user_id,
               name: u.name, department: u.department, x: u.x, y: u.y,
             });
+            // Einladungsbenachrichtigung nach erstem set_name des Gastes
+            if (pendingInvite && u.user_id.startsWith('g_')) {
+              await publishEvent({
+                type: 'notify_user',
+                targetUserId: pendingInvite.inviterId,
+                senderId: u.user_id,
+                callType: 'guest_joined',
+                guestName: u.name,
+              });
+              console.log(`[Presence] guest_joined Benachrichtigung → ${pendingInvite.inviterId} (Gast: ${u.name})`);
+            }
             break;
 
           case 'move':

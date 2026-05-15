@@ -10,6 +10,14 @@ import { dispatchProxEvent } from './useProximityCall';
 import { WS_PATH } from '../model/constants';
 import type { WsInbound, WsOutbound } from '../model/types';
 
+function speakText(text: string) {
+  try {
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'de-DE';
+    window.speechSynthesis.speak(utt);
+  } catch { /* Browser ohne SpeechSynthesis */ }
+}
+
 function playRingSound() {
   try {
     const ctx = new AudioContext();
@@ -50,6 +58,11 @@ export function presenceSend(msg: WsOutbound): void {
 
 const MAX_DELAY = 10_000;
 
+// Einladungs-Token aus URL-Parametern (einmalig beim Laden ausgelesen)
+const _inviteToken = typeof window !== 'undefined'
+  ? new URLSearchParams(window.location.search).get('invite')
+  : null;
+
 export function usePresence() {
   const { jwt, authStatus, email } = useAuthStore();
   const { setStatus } = useAuthStore();
@@ -80,8 +93,11 @@ export function usePresence() {
 
     const token  = jwtRef.current;
     const uid    = userIdRef.current;
+    const invite = _inviteToken ? `&invite=${encodeURIComponent(_inviteToken)}` : '';
     const wsUrl  = token
-      ? `${WS_PATH}?token=${token}${uid ? `&userId=${encodeURIComponent(uid)}` : ''}`
+      ? `${WS_PATH}?token=${token}${uid ? `&userId=${encodeURIComponent(uid)}` : ''}${invite}`
+      : _inviteToken
+      ? `${WS_PATH}?invite=${encodeURIComponent(_inviteToken)}`
       : WS_PATH;
 
     console.log('[WS] connect() aufgerufen → url:', wsUrl, '| name:', nameRef.current, '| jwt vorhanden:', !!token);
@@ -145,6 +161,9 @@ export function usePresence() {
             const callerName = usePresenceStore.getState().remoteUsers[data.senderId]?.name ?? 'Jemand';
             useFollowStore.getState().setIncomingCall({ fromUserId: data.senderId, fromName: callerName });
             setTimeout(() => useFollowStore.getState().setIncomingCall(null), 8000);
+          } else if (data.callType === 'guest_joined') {
+            const guestName = data.guestName;
+            speakText(guestName ? `${guestName} ist beigetreten` : 'Ein Gast ist beigetreten');
           }
           break;
         }

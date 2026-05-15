@@ -8,6 +8,7 @@ import { useCameraStore } from '../../model/stores/cameraStore';
 import { useServiceStatusStore } from '../../model/stores/serviceStatusStore';
 import { useProfileStore } from '../../model/stores/profileStore';
 import { useContextMenuStore } from '../../model/stores/contextMenuStore';
+import { useReceptionMenuStore } from '../../model/stores/receptionMenuStore';
 import { P } from '../../model/constants';
 import SmileyAvatar from '../avatars/SmileyAvatar';
 import ChatBubble from '../avatars/ChatBubble';
@@ -21,8 +22,9 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
   const remoteUsers  = usePresenceStore((s) => s.remoteUsers);
   const chatBubbles  = usePresenceStore((s) => s.chatBubbles);
   const openServiceStatus = useServiceStatusStore((s) => s.open);
-  const openProfile    = useProfileStore((s) => s.open);
-  const openCtxMenu    = useContextMenuStore((s) => s.open);
+  const openProfile       = useProfileStore((s) => s.open);
+  const openCtxMenu       = useContextMenuStore((s) => s.open);
+  const openReceptionMenu = useReceptionMenuStore((s) => s.open);
   const avatarUrl    = useProfileStore((s) => s.avatarUrl);
 
   const [ownImgEl, setOwnImgEl] = useState<HTMLImageElement | null>(null);
@@ -85,7 +87,11 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
             animate={true}
             animateDuration={isBot ? 5 : 0.1}
             onClick={user.user_id === 'bot_admin' ? openServiceStatus : undefined}
-          onContextMenu={isBot ? undefined : (sx, sy) => openCtxMenu(user.user_id, user.name, sx, sy)}
+          onContextMenu={
+            isBot
+              ? (user.user_id === 'bot_empfang' ? (sx, sy) => openReceptionMenu(sx, sy) : undefined)
+              : (sx, sy) => openCtxMenu(user.user_id, user.name, sx, sy)
+          }
           />
         );
       })}
