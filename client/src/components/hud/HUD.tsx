@@ -84,9 +84,11 @@ interface HUDProps {
   furnitureModeActive?: boolean;
   onToggleMessages?: () => void;
   messagesPanelOpen?: boolean;
+  onToggleDesigner?: () => void;
+  designerActive?: boolean;
 }
 
-const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMessages, messagesPanelOpen }: HUDProps) => {
+const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMessages, messagesPanelOpen, onToggleDesigner, designerActive }: HUDProps) => {
   const { wx, wy, currentRoom } = usePlayerStore();
   const scale         = useCameraStore((s) => s.scale);
   const wsStatus      = usePresenceStore((s) => s.wsStatus);
@@ -165,6 +167,22 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
           onClick={onToggleFurniture}
         >
           🪑 {furnitureModeActive ? 'Möbelmodus aktiv' : 'Möbel'}
+        </button>
+      )}
+      {isAuth && (
+        <button
+          style={{
+            ...meetingBtnStyle,
+            background: designerActive
+              ? 'rgba(245,158,11,0.7)'
+              : 'rgba(15,15,19,0.85)',
+            border: designerActive
+              ? '1px solid rgba(245,158,11,0.8)'
+              : '1px solid rgba(255,255,255,0.15)',
+          }}
+          onClick={onToggleDesigner}
+        >
+          📐 {designerActive ? 'Grundriss aktiv' : 'Grundriss'}
         </button>
       )}
       {isAuth && (

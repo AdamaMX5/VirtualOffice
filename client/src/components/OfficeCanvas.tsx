@@ -15,6 +15,10 @@ import ConnectionErrorModal from './media/ConnectionErrorModal';
 import MeetingOverlay from './meeting/MeetingOverlay';
 import FurniturePanel from './furniture/FurniturePanel';
 import MessagesPanel from './messages/MessagesPanel';
+import DesignerLayer from './layers/DesignerLayer';
+import DesignerPanel from './designer/DesignerPanel';
+import DesignerRoomModal from './modals/DesignerRoomModal';
+import { useDesignerStore } from '../model/stores/designerStore';
 import { usePresence } from '../hooks/usePresence';
 import { useProfile } from '../hooks/useProfile';
 import { useGameLoop } from '../hooks/useGameLoop';
@@ -53,8 +57,10 @@ const OfficeCanvas = () => {
   const { panelOpen: messagesPanelOpen, togglePanel: toggleMessagesPanel,
           closePanel: closeMessagesPanel } = useMessageStore();
 
-  const followTarget   = useFollowStore((s) => s.followTarget);
-  const incomingCall   = useFollowStore((s) => s.incomingCall);
+  const followTarget    = useFollowStore((s) => s.followTarget);
+  const incomingCall    = useFollowStore((s) => s.incomingCall);
+  const designerActive  = useDesignerStore((s) => s.active);
+  const toggleDesigner  = useDesignerStore((s) => s.toggle);
 
   // Polling + Echtzeit-Notifications (läuft dauerhaft)
   useMessaging();
@@ -245,6 +251,7 @@ const OfficeCanvas = () => {
   // ── Stage-Klick: Möbel platzieren oder deselektieren ──────────────────────
   const handleStageClick = useCallback((e: { evt: MouseEvent; target: unknown; currentTarget: unknown }) => {
     if (e.evt.button !== 0) return;
+    if (useDesignerStore.getState().active) return; // Designer-Layer behandelt Klicks selbst
     if (!useFurnitureStore.getState().furnitureModeActive) return;
 
     const pending = useFurnitureStore.getState().pendingCatalogItem;
@@ -264,14 +271,20 @@ const OfficeCanvas = () => {
   return (
     <div style={{
       width: '100vw', height: '100vh', position: 'relative', touchAction: 'none',
-      cursor: furnitureModeActive && pendingCatalogItem ? 'crosshair' : 'default',
+      cursor: designerActive ? 'crosshair' : furnitureModeActive && pendingCatalogItem ? 'crosshair' : 'default',
     }}>
       {/* Furniture-Mode-Overlay: leichter blauer Rahmen */}
       {furnitureModeActive && (
         <div style={{
           position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 50,
           boxShadow: 'inset 0 0 0 3px rgba(99,179,237,0.4)',
-          borderRadius: 0,
+        }} />
+      )}
+      {/* Designer-Mode-Overlay: orange Rahmen */}
+      {designerActive && (
+        <div style={{
+          position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 50,
+          boxShadow: 'inset 0 0 0 3px rgba(245,158,11,0.5)',
         }} />
       )}
 
@@ -287,6 +300,7 @@ const OfficeCanvas = () => {
         <GroundLayer    {...layerProps} />
         <BuildingLayer  {...layerProps} />
         <FurnitureLayer {...layerProps} />
+        <DesignerLayer  {...layerProps} />
         <AvatarLayer    {...layerProps} updateFromDrag={updateFromDrag} paused={showMeeting} />
       </Stage>
 
@@ -297,6 +311,8 @@ const OfficeCanvas = () => {
         furnitureModeActive={furnitureModeActive}
         onToggleMessages={toggleMessagesPanel}
         messagesPanelOpen={messagesPanelOpen}
+        onToggleDesigner={toggleDesigner}
+        designerActive={designerActive}
       />
       <ControlsHint />
       <ChatInput />
@@ -308,6 +324,8 @@ const OfficeCanvas = () => {
       <VirtualJoystick />
       {furnitureModeActive && <FurniturePanel onClose={toggleFurnitureMode} />}
       {messagesPanelOpen  && <MessagesPanel  onClose={closeMessagesPanel} />}
+      {designerActive     && <DesignerPanel  onClose={toggleDesigner} />}
+      <DesignerRoomModal />
 
       {/* Follow-Indikator */}
       {followTarget && (
