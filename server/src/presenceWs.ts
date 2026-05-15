@@ -384,7 +384,8 @@ export function attachPresenceWs(server: Server): void {
 
           case 'notify_user': {
             const targetId = String(msg.targetUserId ?? '');
-            await publishEvent({ type: 'notify_user', targetUserId: targetId, senderId: u.user_id });
+            const callType = msg.callType ? String(msg.callType) : undefined;
+            await publishEvent({ type: 'notify_user', targetUserId: targetId, senderId: u.user_id, ...(callType && { callType }) });
             break;
           }
 

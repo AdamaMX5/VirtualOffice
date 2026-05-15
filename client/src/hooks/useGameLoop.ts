@@ -1,9 +1,20 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useCameraStore } from '../model/stores/cameraStore';
+import { usePresenceStore } from '../model/stores/presenceStore';
+import { useFollowStore } from '../model/stores/followStore';
 import { MAP, WALK, SPRINT, SEND_INTERVAL, P } from '../model/constants';
 import { getRoomAtPos } from '../model/mapData';
 import { useKeyboard } from './useKeyboard';
+
+// Modul-Level Follow-Target (wie presenceSend — von außen setzbar)
+let _followUserId: string | null = null;
+
+export function setFollowTarget(userId: string | null, name?: string) {
+  _followUserId = userId;
+  if (userId && name) useFollowStore.getState().startFollowing(userId, name);
+  else if (!userId)   useFollowStore.getState().stopFollowing();
+}
 
 interface GameLoopOptions {
   /** Callback zum Senden der aktuellen Position per WebSocket */
@@ -97,6 +108,12 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
       if (k.has('KeyA')) dx -= 1;
       if (k.has('KeyD')) dx += 1;
 
+      // Tastensteuerung bricht Follow ab
+      if ((dx !== 0 || dy !== 0) && _followUserId) {
+        _followUserId = null;
+        useFollowStore.getState().stopFollowing();
+      }
+
       if (dx !== 0 || dy !== 0) {
         if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
         const newWx = Math.max(0, Math.min(MAP.w, posRef.current.wx + dx * spd));
@@ -128,6 +145,46 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
           sendMove(newWx, newWy);
           lastSentRef.current = { x: newWx, y: newWy };
           lastSendRef.current = now2;
+        }
+      } else if (_followUserId) {
+        // ── Follow-Modus ──────────────────────────────────────────
+        const target = usePresenceStore.getState().remoteUsers[_followUserId];
+        if (!target) {
+          _followUserId = null;
+          useFollowStore.getState().stopFollowing();
+        } else {
+          const FOLLOW_DIST = 2.5; // Abstand in Tiles
+          const tdx = target.x - posRef.current.wx;
+          const tdy = target.y - posRef.current.wy;
+          const dist = Math.sqrt(tdx * tdx + tdy * tdy);
+          if (dist > FOLLOW_DIST + 0.15) {
+            const moveSpd = Math.min(spd, dist - FOLLOW_DIST);
+            const ratio   = moveSpd / dist;
+            const newWx   = Math.max(0, Math.min(MAP.w, posRef.current.wx + tdx * ratio));
+            const newWy   = Math.max(0, Math.min(MAP.h, posRef.current.wy + tdy * ratio));
+            posRef.current = { wx: newWx, wy: newWy };
+            setPosition(newWx, newWy);
+
+            const newRoom = getRoomAtPos(newWx, newWy);
+            if (newRoom !== roomRef.current) { roomRef.current = newRoom; setCurrentRoom(newRoom); }
+
+            // Kamera immer auf eigenen Avatar fokussieren während Follow
+            const newOffset = {
+              x: stageW.current / 2 - newWx * 32 * scaleRef.current,
+              y: stageH.current / 2 - newWy * 32 * scaleRef.current,
+            };
+            offsetRef.current = newOffset;
+            setOffset(newOffset);
+
+            const now3 = performance.now();
+            const ddx2 = Math.abs(newWx - lastSentRef.current.x);
+            const ddy2 = Math.abs(newWy - lastSentRef.current.y);
+            if (now3 - lastSendRef.current >= SEND_INTERVAL && (ddx2 >= 0.01 || ddy2 >= 0.01)) {
+              sendMove(newWx, newWy);
+              lastSentRef.current = { x: newWx, y: newWy };
+              lastSendRef.current = now3;
+            }
+          }
         }
       }
 

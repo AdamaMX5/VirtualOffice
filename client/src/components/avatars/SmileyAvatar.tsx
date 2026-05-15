@@ -14,7 +14,7 @@ interface SmileyAvatarProps {
   videoElement?: HTMLVideoElement | null;
   profileImageEl?: HTMLImageElement | null;
   onClick?: () => void;
-  onContextMenu?: () => void;
+  onContextMenu?: (screenX: number, screenY: number) => void;
   // Drag-to-Move (nur lokaler Spieler)
   draggable?: boolean;
   onDragStart?: () => void;
@@ -49,7 +49,7 @@ const SmileyAvatar = React.memo(({ x, y, name, isPlayer = false, isBot = false, 
       onDragMove={onDragMove}
       onDragEnd={onDragEnd}
       onClick={onClick}
-      onContextMenu={onContextMenu ? (e) => { e.evt.preventDefault(); onContextMenu(); } : undefined}
+      onContextMenu={onContextMenu ? (e) => { e.evt.preventDefault(); onContextMenu(e.evt.clientX, e.evt.clientY); } : undefined}
       onMouseEnter={() => { document.body.style.cursor = (onClick || onContextMenu) ? 'pointer' : draggable ? 'grab' : 'default'; }}
       onMouseLeave={() => { document.body.style.cursor = 'default'; }}
       onDragStart={draggable ? () => { document.body.style.cursor = 'grabbing'; onDragStart?.(); } : undefined}

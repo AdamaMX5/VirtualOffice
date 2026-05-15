@@ -4,10 +4,34 @@ import { usePresenceStore } from '../model/stores/presenceStore';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useMessageStore } from '../model/stores/messageStore';
 import { useMeetingStore } from '../model/stores/meetingStore';
+import { useFollowStore } from '../model/stores/followStore';
 import { getUnreadCount } from '../services/messageClient';
 import { dispatchProxEvent } from './useProximityCall';
 import { WS_PATH } from '../model/constants';
 import type { WsInbound, WsOutbound } from '../model/types';
+
+function playRingSound() {
+  try {
+    const ctx = new AudioContext();
+    const ring = (t: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880,  t);
+      osc.frequency.setValueAtTime(1100, t + 0.12);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.25, t + 0.03);
+      gain.gain.linearRampToValueAtTime(0, t + 0.28);
+      osc.start(t);
+      osc.stop(t + 0.28);
+    };
+    ring(ctx.currentTime);
+    ring(ctx.currentTime + 0.38);
+    ring(ctx.currentTime + 0.76);
+  } catch { /* ignore — Browser blockt AudioContext vor User-Interaction */ }
+}
 
 // ── Modul-Level Send-Singleton (wie getRoom() in useLiveKit) ──────────────────
 let _wsSend: ((msg: WsOutbound) => void) | null = null;
@@ -113,6 +137,17 @@ export function usePresence() {
             .then((n) => useMessageStore.getState().setUnreadTotal(n))
             .catch(() => {});
           break;
+        case 'notify_user': {
+          const myId = useAuthStore.getState().userId;
+          if (data.targetUserId !== myId) break;
+          if (data.callType === 'call') {
+            playRingSound();
+            const callerName = usePresenceStore.getState().remoteUsers[data.senderId]?.name ?? 'Jemand';
+            useFollowStore.getState().setIncomingCall({ fromUserId: data.senderId, fromName: callerName });
+            setTimeout(() => useFollowStore.getState().setIncomingCall(null), 8000);
+          }
+          break;
+        }
         case 'chat': {
           const { setChatBubble, clearChatBubble } = usePresenceStore.getState();
           setChatBubble(data.userId, data.text);

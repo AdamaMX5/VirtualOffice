@@ -18,6 +18,8 @@ import MessagesPanel from './messages/MessagesPanel';
 import { usePresence } from '../hooks/usePresence';
 import { useProfile } from '../hooks/useProfile';
 import { useGameLoop } from '../hooks/useGameLoop';
+import { setFollowTarget } from '../hooks/useGameLoop';
+import { useFollowStore } from '../model/stores/followStore';
 import { useCamera } from '../hooks/useCamera';
 import { useTokenRefresh } from '../hooks/useTokenRefresh';
 import { useMeetingRoom } from '../hooks/useMeetingRoom';
@@ -50,6 +52,9 @@ const OfficeCanvas = () => {
           toggleFurnitureMode, selectItem, setPendingCatalogItem } = useFurnitureStore();
   const { panelOpen: messagesPanelOpen, togglePanel: toggleMessagesPanel,
           closePanel: closeMessagesPanel } = useMessageStore();
+
+  const followTarget   = useFollowStore((s) => s.followTarget);
+  const incomingCall   = useFollowStore((s) => s.incomingCall);
 
   // Polling + Echtzeit-Notifications (läuft dauerhaft)
   useMessaging();
@@ -303,6 +308,56 @@ const OfficeCanvas = () => {
       <VirtualJoystick />
       {furnitureModeActive && <FurniturePanel onClose={toggleFurnitureMode} />}
       {messagesPanelOpen  && <MessagesPanel  onClose={closeMessagesPanel} />}
+
+      {/* Follow-Indikator */}
+      {followTarget && (
+        <div style={{
+          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(15,23,42,0.92)', border: '1px solid rgba(99,179,237,0.3)',
+          borderRadius: 24, padding: '8px 18px',
+          color: '#93c5fd', fontSize: 13, fontWeight: 600,
+          display: 'flex', alignItems: 'center', gap: 10, zIndex: 1500,
+          backdropFilter: 'blur(6px)',
+        }}>
+          🏃 Folge <strong style={{ color: '#e2e8f0' }}>{followTarget.name}</strong>
+          <button
+            onClick={() => setFollowTarget(null)}
+            style={{
+              background: 'rgba(99,179,237,0.15)', border: '1px solid rgba(99,179,237,0.3)',
+              borderRadius: 12, padding: '2px 10px', color: '#93c5fd',
+              cursor: 'pointer', fontSize: 12, fontWeight: 600,
+            }}
+          >
+            Stop
+          </button>
+        </div>
+      )}
+
+      {/* Eingehender Anruf */}
+      {incomingCall && (
+        <div style={{
+          position: 'fixed', top: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(15,23,42,0.95)', border: '1px solid rgba(34,197,94,0.4)',
+          borderRadius: 16, padding: '14px 24px',
+          color: '#e2e8f0', fontSize: 14, fontWeight: 600,
+          display: 'flex', alignItems: 'center', gap: 12, zIndex: 2500,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(8px)',
+        }}>
+          <span style={{ fontSize: 22 }}>📞</span>
+          <span><strong style={{ color: '#86efac' }}>{incomingCall.fromName}</strong> ruft an</span>
+          <button
+            onClick={() => useFollowStore.getState().setIncomingCall(null)}
+            style={{
+              background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)',
+              borderRadius: 10, padding: '4px 12px', color: '#fca5a5',
+              cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 };
