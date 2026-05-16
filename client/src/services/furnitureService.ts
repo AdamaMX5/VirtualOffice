@@ -59,6 +59,8 @@ function toPlacedItem(doc: ObjectDoc): PlacedItem {
     roomId:        d.roomId ? String(d.roomId) : undefined,
     ownerId:       doc.refs?.ownerId ?? String(d.ownerId ?? ''),
     ownerName:     d.ownerName ? String(d.ownerName) : undefined,
+    deskUserId:    d.deskUserId   ? String(d.deskUserId)   : undefined,
+    deskUserName:  d.deskUserName ? String(d.deskUserName) : undefined,
   };
 }
 
@@ -220,6 +222,37 @@ export async function deleteCatalogItem(id: string): Promise<void> {
     await deleteObject(CATALOG_COL, id);
   } catch (err) {
     console.error('[furniture] Katalog-Eintrag löschen:', err);
+  }
+}
+
+// ── Schreibtisch-Eigentümerschaft ─────────────────────────────────────────────
+
+export async function claimDesk(itemId: string): Promise<void> {
+  const userId   = getJwtUserId();
+  const userName = usePlayerStore.getState().name;
+  useFurnitureStore.getState().updatePlacedItem(itemId, { deskUserId: userId, deskUserName: userName });
+  try {
+    await patchObject(PLACED_COL, itemId, { deskUserId: userId, deskUserName: userName });
+  } catch (err) {
+    console.error('[furniture] Annektieren fehlgeschlagen:', err);
+  }
+}
+
+export async function transferDesk(itemId: string, newUserId: string, newUserName: string): Promise<void> {
+  useFurnitureStore.getState().updatePlacedItem(itemId, { deskUserId: newUserId, deskUserName: newUserName });
+  try {
+    await patchObject(PLACED_COL, itemId, { deskUserId: newUserId, deskUserName: newUserName });
+  } catch (err) {
+    console.error('[furniture] Weitergeben fehlgeschlagen:', err);
+  }
+}
+
+export async function releaseDesk(itemId: string): Promise<void> {
+  useFurnitureStore.getState().updatePlacedItem(itemId, { deskUserId: undefined, deskUserName: undefined });
+  try {
+    await patchObject(PLACED_COL, itemId, { deskUserId: null, deskUserName: null });
+  } catch (err) {
+    console.error('[furniture] Freigeben fehlgeschlagen:', err);
   }
 }
 

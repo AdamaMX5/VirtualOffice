@@ -158,7 +158,7 @@ const FurnitureLayer: React.FC<LayerProps> = ({ x, y, scaleX, scaleY }) => {
             isSelected={selectedId === item.id}
             canEdit={canEdit}
             onSelect={() => selectItem(item.id)}
-            onOpenDesk={() => openDesk(item.id, item.ownerId, item.ownerName ?? item.ownerId)}
+            onOpenDesk={() => openDesk(item.id, item.deskUserId ?? '', item.deskUserName ?? '')}
             trRef={trRef}
           />
         );

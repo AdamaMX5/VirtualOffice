@@ -6,6 +6,7 @@ import { useFurnitureStore } from '../../model/stores/furnitureStore';
 import { useMessageStore } from '../../model/stores/messageStore';
 import { getJwtUserId } from '../../services/objectClient';
 import { loadDeskNotes, addDeskNote, deleteDeskNote, moveDeskNote } from '../../services/deskNoteService';
+import { claimDesk, transferDesk, releaseDesk } from '../../services/furnitureService';
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
@@ -291,6 +292,51 @@ const S = {
     fontSize: 12,
     textAlign: 'center' as const,
   },
+
+  ownerBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap' as const,
+    padding: '8px 12px',
+    background: 'rgba(255,255,255,0.04)',
+    borderRadius: 8,
+    border: '1px solid rgba(255,255,255,0.07)',
+    fontSize: 13,
+  },
+
+  ownerLabel: {
+    flex: 1,
+    color: '#94a3b8',
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+
+  ownerBtn: (color: string) => ({
+    background: 'none',
+    border: `1px solid ${color}`,
+    borderRadius: 6,
+    color,
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: 'pointer',
+    padding: '4px 10px',
+    whiteSpace: 'nowrap' as const,
+    flexShrink: 0,
+  } as React.CSSProperties),
+
+  userPicker: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: 6,
+    padding: '8px 12px',
+    background: 'rgba(255,255,255,0.03)',
+    borderRadius: 8,
+    border: '1px solid rgba(255,255,255,0.07)',
+    fontSize: 12,
+  },
 };
 
 // ── Hilfsfunktionen ───────────────────────────────────────────────────────────
@@ -416,34 +462,83 @@ const NoteOnDesk: React.FC<NoteOnDeskProps> = ({
 
 // ── Hauptkomponente ───────────────────────────────────────────────────────────
 
+interface PresenceUser { userId: string; name: string; }
+
 const DeskModal: React.FC = () => {
   const { openDeskId, openDeskOwnerId, openDeskOwnerName, notes, readingNote } = useDeskStore();
   const { closeDesk, setReadingNote } = useDeskStore();
   const jwt         = useAuthStore((s) => s.jwt);
+  const isAdmin     = useAuthStore((s) => {
+    if (!s.jwt) return false;
+    try {
+      const p = JSON.parse(atob(s.jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return Array.isArray(p.roles) && p.roles.includes('admin');
+    } catch { return false; }
+  });
   const myName      = usePlayerStore((s) => s.name);
   const myId        = getJwtUserId();
+  const isGuest     = myId?.startsWith('g_') ?? false;
   const placedItems = useFurnitureStore((s) => s.placedItems);
   const deskImageUrl = openDeskId
     ? placedItems.find((i) => i.id === openDeskId)?.imageUrl
     : undefined;
 
-  const [noteText, setNoteText] = useState('');
-  const [dragOver, setDragOver] = useState(false);
-  const [loading,  setLoading]  = useState(false);
+  const [noteText,      setNoteText]      = useState('');
+  const [dragOver,      setDragOver]      = useState(false);
+  const [loading,       setLoading]       = useState(false);
+  const [showPicker,    setShowPicker]    = useState(false);
+  const [onlineUsers,   setOnlineUsers]   = useState<PresenceUser[]>([]);
+  const [loadingUsers,  setLoadingUsers]  = useState(false);
 
   const deskSurfaceRef = useRef<HTMLDivElement>(null);
 
-  const isDeskOwner = myId && openDeskOwnerId === myId;
+  const isDeskOwner = !!(myId && openDeskOwnerId && openDeskOwnerId === myId);
   const canMessage  = jwt !== null
     && openDeskOwnerId
     && openDeskOwnerId !== myId
     && !openDeskOwnerId.startsWith('bot_');
+  const canClaim    = jwt !== null && !isGuest && !openDeskOwnerId;
+  const canTransfer = isDeskOwner || isAdmin;
+  const canRelease  = isDeskOwner || isAdmin;
 
   const handleOpenMessage = useCallback(() => {
     useMessageStore.getState().setActiveUserId(openDeskOwnerId);
     useMessageStore.getState().openPanel();
     closeDesk();
   }, [openDeskOwnerId, closeDesk]);
+
+  const handleClaim = useCallback(async () => {
+    if (!openDeskId) return;
+    await claimDesk(openDeskId);
+    useDeskStore.getState().openDesk(openDeskId, myId ?? '', myName);
+  }, [openDeskId, myId, myName]);
+
+  const handleRelease = useCallback(async () => {
+    if (!openDeskId) return;
+    await releaseDesk(openDeskId);
+    useDeskStore.getState().openDesk(openDeskId, '', '');
+    setShowPicker(false);
+  }, [openDeskId]);
+
+  const openUserPicker = useCallback(async () => {
+    setShowPicker(true);
+    setLoadingUsers(true);
+    try {
+      const res = await fetch('/api/presence/users', {
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+      const users = await res.json() as PresenceUser[];
+      setOnlineUsers(users.filter((u) => u.userId !== myId));
+    } catch { setOnlineUsers([]); }
+    finally { setLoadingUsers(false); }
+  }, [jwt, myId]);
+
+  const handleTransfer = useCallback(async (toUserId: string, toUserName: string) => {
+    if (!openDeskId) return;
+    await transferDesk(openDeskId, toUserId, toUserName);
+    useDeskStore.getState().openDesk(openDeskId, toUserId, toUserName);
+    setShowPicker(false);
+  }, [openDeskId]);
 
   useEffect(() => {
     if (!openDeskId) return;
@@ -527,7 +622,9 @@ const DeskModal: React.FC = () => {
 
         {/* Header */}
         <div style={S.header}>
-          <h2 style={S.title}>{openDeskOwnerName}'s Schreibtisch</h2>
+          <h2 style={S.title}>
+            {openDeskOwnerName ? `${openDeskOwnerName}'s Schreibtisch` : 'Freier Schreibtisch'}
+          </h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {canMessage && (
               <button style={S.messageBtn} onClick={handleOpenMessage}>
@@ -537,6 +634,58 @@ const DeskModal: React.FC = () => {
             <button style={S.closeBtn} onClick={closeDesk}>✕</button>
           </div>
         </div>
+
+        {/* Eigentümer-Leiste */}
+        <div style={S.ownerBar}>
+          <span style={S.ownerLabel}>
+            {openDeskOwnerId
+              ? `👤 ${openDeskOwnerName}`
+              : '🪑 Kein Eigentümer'}
+          </span>
+          {canClaim && (
+            <button style={S.ownerBtn('#34d399')} onClick={handleClaim}>
+              Annektieren
+            </button>
+          )}
+          {canTransfer && openDeskOwnerId && (
+            <button style={S.ownerBtn('#60a5fa')} onClick={openUserPicker}>
+              Weitergeben
+            </button>
+          )}
+          {isAdmin && !openDeskOwnerId && (
+            <button style={S.ownerBtn('#60a5fa')} onClick={openUserPicker}>
+              Zuweisen
+            </button>
+          )}
+          {canRelease && openDeskOwnerId && (
+            <button style={S.ownerBtn('#f87171')} onClick={handleRelease}>
+              Freigeben
+            </button>
+          )}
+        </div>
+
+        {/* User-Picker für Weitergabe / Admin-Zuweisung */}
+        {showPicker && (
+          <div style={S.userPicker}>
+            <span style={{ color: '#64748b', alignSelf: 'center' }}>An wen?</span>
+            {loadingUsers && <span style={{ color: '#94a3b8' }}>Lädt…</span>}
+            {!loadingUsers && onlineUsers.length === 0 && (
+              <span style={{ color: '#64748b' }}>Keine anderen Nutzer online</span>
+            )}
+            {onlineUsers.map((u) => (
+              <button
+                key={u.userId}
+                style={S.ownerBtn('#94a3b8')}
+                onClick={() => handleTransfer(u.userId, u.name)}
+              >
+                {u.name}
+              </button>
+            ))}
+            <button style={S.ownerBtn('#64748b')} onClick={() => setShowPicker(false)}>
+              Abbrechen
+            </button>
+          </div>
+        )}
 
         {/* Tischfläche */}
         <div

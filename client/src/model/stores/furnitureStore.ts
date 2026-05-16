@@ -22,8 +22,10 @@ export interface PlacedItem {
   imageUrl: string;
   catalogItemId: string;
   roomId?: string;
-  ownerId: string;
+  ownerId: string;       // wer das Möbelstück platziert hat (Edit-Berechtigung)
   ownerName?: string;
+  deskUserId?: string;   // wer den Schreibtisch "besitzt" (leer = freier Schreibtisch)
+  deskUserName?: string;
 }
 
 interface FurnitureState {
