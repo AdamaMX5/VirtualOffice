@@ -3,6 +3,7 @@ import { useDeskStore, DeskNote } from '../../model/stores/deskStore';
 import { useAuthStore } from '../../model/stores/authStore';
 import { usePlayerStore } from '../../model/stores/playerStore';
 import { useFurnitureStore } from '../../model/stores/furnitureStore';
+import { useMessageStore } from '../../model/stores/messageStore';
 import { getJwtUserId } from '../../services/objectClient';
 import { loadDeskNotes, addDeskNote, deleteDeskNote, moveDeskNote } from '../../services/deskNoteService';
 
@@ -53,6 +54,21 @@ const S = {
     cursor: 'pointer',
     padding: '4px 10px',
     lineHeight: 1,
+  },
+
+  messageBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    background: 'rgba(37,99,235,0.15)',
+    border: '1px solid rgba(99,179,237,0.3)',
+    borderRadius: 8,
+    color: '#93c5fd',
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+    padding: '6px 14px',
+    whiteSpace: 'nowrap' as const,
   },
 
   // Tischfläche — Höhe wird vom <img> oder vom Fallback-div bestimmt
@@ -418,6 +434,16 @@ const DeskModal: React.FC = () => {
   const deskSurfaceRef = useRef<HTMLDivElement>(null);
 
   const isDeskOwner = myId && openDeskOwnerId === myId;
+  const canMessage  = jwt !== null
+    && openDeskOwnerId
+    && openDeskOwnerId !== myId
+    && !openDeskOwnerId.startsWith('bot_');
+
+  const handleOpenMessage = useCallback(() => {
+    useMessageStore.getState().setActiveUserId(openDeskOwnerId);
+    useMessageStore.getState().openPanel();
+    closeDesk();
+  }, [openDeskOwnerId, closeDesk]);
 
   useEffect(() => {
     if (!openDeskId) return;
@@ -502,7 +528,14 @@ const DeskModal: React.FC = () => {
         {/* Header */}
         <div style={S.header}>
           <h2 style={S.title}>{openDeskOwnerName}'s Schreibtisch</h2>
-          <button style={S.closeBtn} onClick={closeDesk}>✕</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {canMessage && (
+              <button style={S.messageBtn} onClick={handleOpenMessage}>
+                💬 Nachricht schreiben
+              </button>
+            )}
+            <button style={S.closeBtn} onClick={closeDesk}>✕</button>
+          </div>
         </div>
 
         {/* Tischfläche */}
