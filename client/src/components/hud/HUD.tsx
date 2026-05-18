@@ -86,9 +86,10 @@ interface HUDProps {
   messagesPanelOpen?: boolean;
   onToggleDesigner?: () => void;
   designerActive?: boolean;
+  pixiMode?: boolean;
 }
 
-const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMessages, messagesPanelOpen, onToggleDesigner, designerActive }: HUDProps) => {
+const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMessages, messagesPanelOpen, onToggleDesigner, designerActive, pixiMode }: HUDProps) => {
   const { wx, wy, currentRoom } = usePlayerStore();
   const scale         = useCameraStore((s) => s.scale);
   const wsStatus      = usePresenceStore((s) => s.wsStatus);
@@ -155,6 +156,8 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
       )}
       {isAuth && (
         <button
+          disabled={pixiMode}
+          title={pixiMode ? 'Nicht verfügbar im PixiJS-Modus' : undefined}
           style={{
             ...meetingBtnStyle,
             background: furnitureModeActive
@@ -163,6 +166,8 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
             border: furnitureModeActive
               ? '1px solid rgba(99,179,237,0.8)'
               : '1px solid rgba(255,255,255,0.15)',
+            opacity: pixiMode ? 0.35 : 1,
+            cursor: pixiMode ? 'not-allowed' : 'pointer',
           }}
           onClick={onToggleFurniture}
         >
@@ -171,6 +176,8 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
       )}
       {isAuth && (
         <button
+          disabled={pixiMode}
+          title={pixiMode ? 'Nicht verfügbar im PixiJS-Modus' : undefined}
           style={{
             ...meetingBtnStyle,
             background: designerActive
@@ -179,6 +186,8 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
             border: designerActive
               ? '1px solid rgba(245,158,11,0.8)'
               : '1px solid rgba(255,255,255,0.15)',
+            opacity: pixiMode ? 0.35 : 1,
+            cursor: pixiMode ? 'not-allowed' : 'pointer',
           }}
           onClick={onToggleDesigner}
         >

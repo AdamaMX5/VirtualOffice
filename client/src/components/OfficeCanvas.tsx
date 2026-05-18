@@ -4,6 +4,8 @@ import GroundLayer from './layers/GroundLayer';
 import BuildingLayer from './layers/BuildingLayer';
 import FurnitureLayer from './layers/FurnitureLayer';
 import AvatarLayer from './layers/AvatarLayer';
+import PixiCanvas from './PixiCanvas';
+import { useEngineStore } from '../model/stores/engineStore';
 import HUD from './hud/HUD';
 import ControlsHint from './hud/ControlsHint';
 import VirtualJoystick from './hud/VirtualJoystick';
@@ -61,6 +63,7 @@ const OfficeCanvas = () => {
   const incomingCall    = useFollowStore((s) => s.incomingCall);
   const designerActive  = useDesignerStore((s) => s.active);
   const toggleDesigner  = useDesignerStore((s) => s.toggle);
+  const engine          = useEngineStore((s) => s.engine);
 
   // Polling + Echtzeit-Notifications (läuft dauerhaft)
   useMessaging();
@@ -197,6 +200,44 @@ const OfficeCanvas = () => {
     };
   }, []);
 
+  // ── PixiJS-Modus: Camera-Events via DOM (Konva-Stage nicht aktiv) ────────
+  useEffect(() => {
+    if (engine !== 'pixi') return;
+    const pixiDrag = { active: false, startOffset: { x: 0, y: 0 }, startClient: { x: 0, y: 0 } };
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      handleWheel(e, e.clientX, e.clientY);
+    };
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      e.preventDefault();
+      const { startOffset, startClient } = startDrag(e.clientX, e.clientY);
+      pixiDrag.active = true;
+      pixiDrag.startOffset = startOffset;
+      pixiDrag.startClient = startClient;
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!pixiDrag.active) return;
+      updateDrag(e.clientX, e.clientY, pixiDrag.startOffset, pixiDrag.startClient);
+    };
+    const onMouseUp = (e: MouseEvent) => { if (e.button === 2) pixiDrag.active = false; };
+    const onCtxMenu = (e: Event) => e.preventDefault();
+
+    window.addEventListener('wheel',       onWheel,     { passive: false });
+    window.addEventListener('mousedown',   onMouseDown);
+    window.addEventListener('mousemove',   onMouseMove);
+    window.addEventListener('mouseup',     onMouseUp);
+    window.addEventListener('contextmenu', onCtxMenu);
+    return () => {
+      window.removeEventListener('wheel',       onWheel);
+      window.removeEventListener('mousedown',   onMouseDown);
+      window.removeEventListener('mousemove',   onMouseMove);
+      window.removeEventListener('mouseup',     onMouseUp);
+      window.removeEventListener('contextmenu', onCtxMenu);
+    };
+  }, [engine, handleWheel, startDrag, updateDrag]);
+
   // ── Rechtsklick-Drag ──────────────────────────────────────────────────────
   const dragStateRef = useRef<{
     active: boolean;
@@ -288,31 +329,36 @@ const OfficeCanvas = () => {
         }} />
       )}
 
-      <Stage
-        width={size.w}
-        height={size.h}
-        onWheel={handleWheel2}
-        onMousedown={handleMouseDown}
-        onClick={handleStageClick}
-        onContextmenu={(e: { evt: MouseEvent }) => e.evt.preventDefault()}
-        style={{ position: 'absolute', top: 0, left: 0, visibility: showMeeting ? 'hidden' : 'visible' }}
-      >
-        <GroundLayer    {...layerProps} />
-        <BuildingLayer  {...layerProps} />
-        <FurnitureLayer {...layerProps} />
-        <DesignerLayer  {...layerProps} />
-        <AvatarLayer    {...layerProps} updateFromDrag={updateFromDrag} paused={showMeeting} />
-      </Stage>
+      {engine === 'pixi' ? (
+        <PixiCanvas />
+      ) : (
+        <Stage
+          width={size.w}
+          height={size.h}
+          onWheel={handleWheel2}
+          onMousedown={handleMouseDown}
+          onClick={handleStageClick}
+          onContextmenu={(e: { evt: MouseEvent }) => e.evt.preventDefault()}
+          style={{ position: 'absolute', top: 0, left: 0, visibility: showMeeting ? 'hidden' : 'visible' }}
+        >
+          <GroundLayer    {...layerProps} />
+          <BuildingLayer  {...layerProps} />
+          <FurnitureLayer {...layerProps} />
+          <DesignerLayer  {...layerProps} />
+          <AvatarLayer    {...layerProps} updateFromDrag={updateFromDrag} paused={showMeeting} />
+        </Stage>
+      )}
 
       {/* HTML-Overlays */}
       <HUD
         onOpenMeeting={() => setShowMeeting(true)}
-        onToggleFurniture={toggleFurnitureMode}
+        onToggleFurniture={engine === 'pixi' ? undefined : toggleFurnitureMode}
         furnitureModeActive={furnitureModeActive}
         onToggleMessages={toggleMessagesPanel}
         messagesPanelOpen={messagesPanelOpen}
-        onToggleDesigner={toggleDesigner}
+        onToggleDesigner={engine === 'pixi' ? undefined : toggleDesigner}
         designerActive={designerActive}
+        pixiMode={engine === 'pixi'}
       />
       <ControlsHint />
       <ChatInput />
