@@ -1,6 +1,7 @@
 export const config = {
   PORT:              parseInt(process.env.PORT ?? '3000'),
   AUTH_URL:          process.env.AUTH_URL          ?? 'https://auth.freischule.info',
+  OBJECT_URL:        process.env.OBJECT_URL        ?? 'https://object.freischule.info',
   CLIENT_ORIGIN:     process.env.CLIENT_ORIGIN     ?? 'https://office.freischule.info',
   LIVEKIT_URL:       process.env.LIVEKIT_URL        ?? 'https://live.freischule.info',
   LIVEKIT_API_KEY:   process.env.LIVEKIT_API_KEY    ?? 'devkey',

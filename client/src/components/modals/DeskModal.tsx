@@ -527,8 +527,8 @@ const DeskModal: React.FC = () => {
       const res = await fetch('/api/presence/users', {
         headers: { Authorization: `Bearer ${jwt}` },
       });
-      const users = await res.json() as PresenceUser[];
-      setOnlineUsers(users.filter((u) => u.userId !== myId));
+      const { users } = await res.json() as { users: PresenceUser[] };
+      setOnlineUsers((users ?? []).filter((u) => u.userId !== myId));
     } catch { setOnlineUsers([]); }
     finally { setLoadingUsers(false); }
   }, [jwt, myId]);

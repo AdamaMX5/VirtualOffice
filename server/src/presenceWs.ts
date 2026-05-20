@@ -27,7 +27,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import type { IncomingMessage } from 'http';
 import { redisPub, redisSub } from './redis';
-import { resolveInviteToken } from './inviteTokens';
+import { resolveInviteToken, ROOM_STARTS } from './inviteTokens';
 
 // ── Konstanten ────────────────────────────────────────────────────────────────
 
@@ -329,8 +329,11 @@ export function attachPresenceWs(server: Server): void {
 
     console.log(`[Presence] connect  userId=${userId} remote=${remote} isLocal=${isLocal} botId=${botId ?? '-'} redis=${redisReady ? 'ok' : 'offline'}`);
 
-    const lastPos = await loadLastPos(userId);
-    const user: UserInfo = { ws, user_id: userId, name: userId, x: lastPos.x, y: lastPos.y };
+    // Startposition: Raum aus Einladung hat Vorrang, dann letzte gespeicherte Position
+    const roomStart = pendingInvite?.roomId ? ROOM_STARTS[pendingInvite.roomId] : undefined;
+    const lastPos   = roomStart ?? await loadLastPos(userId);
+    const initName  = pendingInvite?.guestName ?? userId;
+    const user: UserInfo = { ws, user_id: userId, name: initName, x: lastPos.x, y: lastPos.y };
     connections.set(ws, user);
 
     try {

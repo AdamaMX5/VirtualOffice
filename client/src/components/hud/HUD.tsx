@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { usePlayerStore } from '../../model/stores/playerStore';
 import { usePresenceStore } from '../../model/stores/presenceStore';
 import { useCameraStore } from '../../model/stores/cameraStore';
 import { useAuthStore } from '../../model/stores/authStore';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useMessageStore } from '../../model/stores/messageStore';
+import { useInviteModalStore } from '../../model/stores/inviteModalStore';
 import { logout } from '../../services/authClient';
 
 const isTouchDevice =
@@ -98,32 +99,13 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
   const liveKitStatus = useLiveKitStore((s) => s.status);
   const isProxCall    = useLiveKitStore((s) => s.isProxCall);
   const unreadTotal   = useMessageStore((s) => s.unreadTotal);
-  const [inviteCopied, setInviteCopied] = useState(false);
+  const openInviteModal = useInviteModalStore((s) => s.open);
 
   const jwt          = useAuthStore((s) => s.jwt);
   const isAuth       = jwt !== null;
   const showLoginBtn = !isAuth;
   const inMeeting    = currentRoom === 'Meetingraum';
   const meetingReady = inMeeting && liveKitStatus === 'connected' && !isProxCall;
-
-  const handleInviteGuest = async () => {
-    try {
-      const token = useAuthStore.getState().jwt;
-      const name  = usePlayerStore.getState().name;
-      const res   = await fetch('/api/invite/create', {
-        method:  'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ name }),
-      });
-      const { token: inviteToken } = await res.json() as { token: string };
-      const url = `${window.location.origin}?invite=${inviteToken}`;
-      await navigator.clipboard.writeText(url);
-      setInviteCopied(true);
-      setTimeout(() => setInviteCopied(false), 2500);
-    } catch (err) {
-      console.error('[Invite] Fehler:', err);
-    }
-  };
 
   // Suppress unused warning
   void authStatus;
@@ -227,12 +209,12 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
         <button
           style={{
             ...meetingBtnStyle,
-            background: inviteCopied ? 'rgba(34,197,94,0.7)' : 'rgba(15,15,19,0.85)',
-            border: inviteCopied ? '1px solid rgba(34,197,94,0.8)' : '1px solid rgba(255,255,255,0.15)',
+            background: 'rgba(15,15,19,0.85)',
+            border: '1px solid rgba(255,255,255,0.15)',
           }}
-          onClick={handleInviteGuest}
+          onClick={openInviteModal}
         >
-          {inviteCopied ? '✅ Link kopiert!' : '🔗 Gast einladen'}
+          🔗 Gast einladen
         </button>
       )}
       {showLoginBtn && (

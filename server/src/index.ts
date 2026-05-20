@@ -10,7 +10,7 @@ import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxie
 import { attachPresenceWs, getConnectedUsers, decodeJwtPayload } from './presenceWs';
 import { startReceptionBot, startAdminBot } from './presence';
 import { fetchCalendarEvents } from './calendarProxy';
-import { createInviteToken } from './inviteTokens';
+import { createInviteToken, getInviteEntry, getInviteAccessStatus } from './inviteTokens';
 
 const app = express();
 
@@ -118,17 +118,61 @@ app.post('/api/livekit/egress/stop', async (req, res) => {
 
 // ── Einladungs-Token ──────────────────────────────────────────
 
-app.post('/api/invite/create', (req, res) => {
+app.post('/api/invite/create', async (req, res) => {
   const authHeader = req.headers.authorization;
   const jwt = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!jwt) { res.status(401).json({ error: 'Nicht eingeloggt' }); return; }
   const payload = decodeJwtPayload(jwt);
   const inviterId = payload ? String(payload.id ?? payload.userId ?? payload.sub ?? '') : '';
   if (!inviterId) { res.status(401).json({ error: 'Ungültiger Token' }); return; }
-  const inviterName = String((req.body as Record<string, unknown>).name ?? '');
-  const token = createInviteToken(inviterId, inviterName);
-  console.log(`[Invite] Token erstellt für ${inviterId} (${inviterName}): ${token}`);
+
+  const body = req.body as Record<string, unknown>;
+  const inviterName      = String(body.inviterName ?? body.name ?? '');
+  const guestName        = String(body.guestName   ?? 'Gast');
+  const roomId           = body.roomId ? String(body.roomId) : undefined;
+  const appointmentTime  = body.appointmentTime ? Number(body.appointmentTime) : undefined;
+
+  const token = createInviteToken(inviterId, inviterName, guestName, roomId, appointmentTime);
+  console.log(`[Invite] Token erstellt für ${inviterId} (${inviterName}) → Gast: ${guestName}, Raum: ${roomId ?? '–'}`);
+
+  // Persistenz im ObjectService (fire-and-forget, Fehler nicht fatal)
+  fetch(`${config.OBJECT_URL}/objects/invitations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+    body: JSON.stringify({
+      data: {
+        token,
+        guestName,
+        roomId:          roomId ?? null,
+        appointmentTime: appointmentTime ?? null,
+        inviterId,
+        inviterName,
+        createdAt: Date.now(),
+      },
+      refs:     { inviterId },
+      isPublic: false,
+      app:      'VirtualOffice',
+    }),
+  }).catch((err) => console.warn('[Invite] ObjectService-Persistenz fehlgeschlagen:', err));
+
   res.json({ token });
+});
+
+app.get('/api/invite/:token', (req, res) => {
+  const { token } = req.params as { token: string };
+  const status = getInviteAccessStatus(token);
+  if (status === 'not_found' || status === 'expired') {
+    res.status(404).json({ error: status });
+    return;
+  }
+  const entry = getInviteEntry(token)!;
+  res.json({
+    status,
+    guestName:       entry.guestName,
+    inviterName:     entry.inviterName,
+    roomId:          entry.roomId ?? null,
+    appointmentTime: entry.appointmentTime ?? null,
+  });
 });
 
 // ── Online-Nutzer (für Empfangsmenü) ─────────────────────────
