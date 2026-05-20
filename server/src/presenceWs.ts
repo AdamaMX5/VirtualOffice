@@ -55,6 +55,7 @@ interface UserInfo {
 }
 
 const connections = new Map<WebSocket, UserInfo>();
+const lockedRooms = new Map<string, string>(); // physRoom → lockOwnerUserId
 let guestCounter = 0;
 
 // ── Redis-Verfügbarkeit ───────────────────────────────────────────────────────
@@ -183,7 +184,7 @@ async function getSnapshot(excludeId?: string): Promise<Array<{
  *  alle anderen werden an alle außer dem Sender gebroadcastet. */
 function routeEventLocally(event: Record<string, unknown>): void {
   const type = String(event.type ?? '');
-  const isTargeted = ['notify_user'].includes(type);
+  const isTargeted = ['notify_user', 'room_knock_request', 'room_admitted'].includes(type);
 
   if (isTargeted) {
     const targetId = String(event.targetUserId ?? '');
@@ -463,6 +464,38 @@ export function attachPresenceWs(server: Server): void {
             break;
           }
 
+          case 'room_lock': {
+            const room   = String(msg.room   ?? '');
+            const locked = Boolean(msg.locked);
+            if (!room) break;
+            if (locked) {
+              lockedRooms.set(room, u.user_id);
+            } else {
+              if (lockedRooms.get(room) === u.user_id) lockedRooms.delete(room);
+            }
+            await publishEvent({ type: 'room_lock_update', room, locked: lockedRooms.has(room), lockerId: u.user_id });
+            console.log(`[Presence] room_lock room=${room} locked=${lockedRooms.has(room)} by=${u.user_id}`);
+            break;
+          }
+
+          case 'room_knock': {
+            const room    = String(msg.room ?? '');
+            const ownerId = lockedRooms.get(room);
+            if (!room || !ownerId) break;
+            await publishEvent({ type: 'room_knock_request', targetUserId: ownerId, room, userId: u.user_id, name: u.name });
+            console.log(`[Presence] room_knock room=${room} from=${u.user_id} → owner=${ownerId}`);
+            break;
+          }
+
+          case 'room_admit': {
+            const room   = String(msg.room   ?? '');
+            const userId = String(msg.userId ?? '');
+            if (lockedRooms.get(room) !== u.user_id) break; // only owner can admit
+            await publishEvent({ type: 'room_admitted', targetUserId: userId, room });
+            console.log(`[Presence] room_admit room=${room} userId=${userId} by=${u.user_id}`);
+            break;
+          }
+
           default:
             console.warn(`[Presence] Unbekannter Nachrichtentyp: "${msg.type}" von userId=${u.user_id}`, msg);
         }
@@ -478,6 +511,13 @@ export function attachPresenceWs(server: Server): void {
       if (u) {
         await saveLastPos(u.user_id, u.x, u.y).catch(() => {});
         await removeUserState(u.user_id).catch(() => {});
+        // Auto-unlock rooms owned by the disconnecting user
+        for (const [room, ownerId] of lockedRooms) {
+          if (ownerId === u.user_id) {
+            lockedRooms.delete(room);
+            publishEvent({ type: 'room_lock_update', room, locked: false }).catch(() => {});
+          }
+        }
         await publishEvent({ type: 'user_left', user_id: u.user_id }).catch(() => {});
       }
     });

@@ -8,6 +8,8 @@ import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useParticipantVolumeStore } from '../../model/stores/participantVolumeStore';
 import { useMessageStore } from '../../model/stores/messageStore';
 import { useMeetingStore } from '../../model/stores/meetingStore';
+import { useRoomLockStore } from '../../model/stores/roomLockStore';
+import { useAuthStore } from '../../model/stores/authStore';
 import { getRoom } from '../../hooks/useLiveKit';
 import { useRecording } from '../../hooks/useRecording';
 import { presenceSend } from '../../hooks/usePresence';
@@ -238,6 +240,26 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
   const bgUrl           = useMeetingStore((s) => s.bgUrl);
   const { isRecording, startRecording, stopRecording, tabHidden } = useRecording();
 
+  const lockedRooms = useRoomLockStore((s) => s.lockedRooms);
+  const knockers    = useRoomLockStore((s) => s.knockers.filter((k) => k.room === 'Meetingraum'));
+  const myId        = useAuthStore.getState().userId;
+  const isLocked    = 'Meetingraum' in lockedRooms;
+  const lockOwner   = lockedRooms['Meetingraum'];
+  const amOwner     = lockOwner === myId;
+
+  const handleToggleLock = useCallback(() => {
+    presenceSend({ type: 'room_lock', room: 'Meetingraum', locked: !isLocked });
+  }, [isLocked]);
+
+  const handleAdmit = useCallback((userId: string) => {
+    presenceSend({ type: 'room_admit', room: 'Meetingraum', userId });
+    useRoomLockStore.getState().removeKnocker(userId, 'Meetingraum');
+  }, []);
+
+  const handleDeny = useCallback((userId: string) => {
+    useRoomLockStore.getState().removeKnocker(userId, 'Meetingraum');
+  }, []);
+
   const [showBgPicker, setShowBgPicker] = useState(false);
 
   // Hintergrundbild beim Öffnen laden (falls noch nicht im Store)
@@ -330,6 +352,19 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
         display: 'flex',
         gap: 8,
       }}>
+        {/* Schloss-Button */}
+        <button
+          onClick={handleToggleLock}
+          style={{
+            ...btnBase,
+            background: isLocked ? 'rgba(239,68,68,0.25)' : 'rgba(15,15,19,0.85)',
+            border: isLocked ? '1px solid rgba(239,68,68,0.5)' : '1px solid rgba(255,255,255,0.15)',
+          }}
+          title={isLocked ? 'Raum entsperren' : 'Raum abschließen'}
+        >
+          {isLocked ? '🔒 Gesperrt' : '🔓 Offen'}
+        </button>
+
         {/* Aufnahme-Button */}
         <button
           onClick={isRecording ? stopRecording : () => startRecording(bgUrl)}
@@ -385,6 +420,47 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
           ✕ Ansicht schließen
         </button>
       </div>
+      {/* Wartezimmer — nur für den Raum-Eigentümer sichtbar wenn Raum gesperrt */}
+      {isLocked && amOwner && (
+        <div style={{
+          position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 402,
+          background: 'rgba(15,15,19,0.92)',
+          border: '1px solid rgba(255,200,50,0.3)',
+          borderRadius: 12,
+          padding: '12px 16px',
+          backdropFilter: 'blur(10px)',
+          minWidth: 240,
+          maxWidth: 400,
+        }}>
+          <div style={{ color: '#fbbf24', fontSize: 12, fontWeight: 700, marginBottom: 8, letterSpacing: 0.5 }}>
+            🚪 WARTEZIMMER
+          </div>
+          {knockers.length === 0 ? (
+            <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>Niemand wartet.</div>
+          ) : (
+            knockers.map((k) => (
+              <div key={k.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ flex: 1, color: '#e2e8f0', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {k.name}
+                </span>
+                <button
+                  onClick={() => handleAdmit(k.userId)}
+                  style={{ background: 'rgba(34,197,94,0.2)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 6, color: '#86efac', fontSize: 12, padding: '3px 10px', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  Einlassen
+                </button>
+                <button
+                  onClick={() => handleDeny(k.userId)}
+                  style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, color: '#fca5a5', fontSize: 12, padding: '3px 10px', cursor: 'pointer' }}
+                >
+                  Ablehnen
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 };

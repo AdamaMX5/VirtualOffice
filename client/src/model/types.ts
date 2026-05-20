@@ -36,7 +36,10 @@ export interface WsProximityCall   { type: 'proximity_call';   fromUserId: strin
 export interface WsProximityEnded  { type: 'proximity_ended';  roomName: string }
 export interface WsProximitySwitch { type: 'proximity_switch'; oldRoomName: string; newRoomName: string }
 export interface WsMeetingBg       { type: 'meeting_bg';       backgroundUrl: string | null }
-export type WsInbound = WsSnapshot | WsJoined | WsMoved | WsLeft | WsNewMessage | WsNotifyUser | WsChatMessage | WsProximityCall | WsProximityEnded | WsProximitySwitch | WsMeetingBg;
+export interface WsRoomLockUpdate   { type: 'room_lock_update';   room: string; locked: boolean; lockerId?: string }
+export interface WsRoomKnockRequest { type: 'room_knock_request'; room: string; userId: string; name: string }
+export interface WsRoomAdmitted     { type: 'room_admitted';      room: string }
+export type WsInbound = WsSnapshot | WsJoined | WsMoved | WsLeft | WsNewMessage | WsNotifyUser | WsChatMessage | WsProximityCall | WsProximityEnded | WsProximitySwitch | WsMeetingBg | WsRoomLockUpdate | WsRoomKnockRequest | WsRoomAdmitted;
 
 // ── WebSocket-Nachrichten (ausgehend zum PresenceService) ─────────────────────
 export interface WsMsgSetName        { type: 'set_name';        name: string; department?: string }
@@ -48,7 +51,10 @@ export interface WsMsgProximityEnter { type: 'proximity_enter'; roomName: string
 export interface WsMsgProximityExit  { type: 'proximity_exit';  roomName: string }
 export interface WsMsgProximitySwitch { type: 'proximity_switch'; oldRoomName: string; newRoomName: string }
 export interface WsMsgMeetingBg      { type: 'meeting_bg';      backgroundUrl: string | null }
-export type WsOutbound = WsMsgSetName | WsMsgMove | WsMsgRefreshToken | WsMsgNotifyUser | WsMsgChat | WsMsgProximityEnter | WsMsgProximityExit | WsMsgProximitySwitch | WsMsgMeetingBg;
+export interface WsMsgRoomLock  { type: 'room_lock';  room: string; locked: boolean }
+export interface WsMsgRoomKnock { type: 'room_knock'; room: string }
+export interface WsMsgRoomAdmit { type: 'room_admit'; room: string; userId: string }
+export type WsOutbound = WsMsgSetName | WsMsgMove | WsMsgRefreshToken | WsMsgNotifyUser | WsMsgChat | WsMsgProximityEnter | WsMsgProximityExit | WsMsgProximitySwitch | WsMsgMeetingBg | WsMsgRoomLock | WsMsgRoomKnock | WsMsgRoomAdmit;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export type AuthStatus =

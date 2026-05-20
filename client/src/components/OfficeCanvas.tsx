@@ -15,6 +15,7 @@ import VideoGrid from './media/VideoGrid';
 import MediaControls from './media/MediaControls';
 import ConnectionErrorModal from './media/ConnectionErrorModal';
 import MeetingOverlay from './meeting/MeetingOverlay';
+import KnockPrompt from './meeting/KnockPrompt';
 import FurniturePanel from './furniture/FurniturePanel';
 import MessagesPanel from './messages/MessagesPanel';
 import DesignerLayer from './layers/DesignerLayer';
@@ -369,6 +370,7 @@ const OfficeCanvas = () => {
       <VideoGrid />
       <MediaControls />
       {showMeeting && <MeetingOverlay onClose={() => setShowMeeting(false)} />}
+      <KnockPrompt />
       <ConnectionErrorModal />
       <VirtualJoystick />
       {furnitureModeActive && <FurniturePanel onClose={toggleFurnitureMode} />}

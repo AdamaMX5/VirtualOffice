@@ -5,6 +5,7 @@ import { usePlayerStore } from '../model/stores/playerStore';
 import { useMessageStore } from '../model/stores/messageStore';
 import { useMeetingStore } from '../model/stores/meetingStore';
 import { useFollowStore } from '../model/stores/followStore';
+import { useRoomLockStore } from '../model/stores/roomLockStore';
 import { getUnreadCount } from '../services/messageClient';
 import { dispatchProxEvent } from './useProximityCall';
 import { WS_PATH } from '../model/constants';
@@ -203,6 +204,16 @@ export function usePresence() {
           break;
         case 'meeting_bg':
           useMeetingStore.getState().setBgUrl((data as { backgroundUrl: string | null }).backgroundUrl);
+          break;
+        case 'room_lock_update':
+          useRoomLockStore.getState().setRoomLocked(data.room, data.locked, data.lockerId);
+          break;
+        case 'room_knock_request':
+          useRoomLockStore.getState().addKnocker({ userId: data.userId, name: data.name, room: data.room });
+          playChimeSound();
+          break;
+        case 'room_admitted':
+          useRoomLockStore.getState().setAdmitted(true);
           break;
       }
     };
