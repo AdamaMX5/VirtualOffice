@@ -9,6 +9,9 @@ export interface DeskNote {
   authorId: string;
   authorName: string;
   createdAt: string;
+  timeStart?:   string;  // ISO — optionaler Zeitraum-Beginn
+  timeEnd?:     string;  // ISO — optionaler Zeitraum-Ende
+  meetingLink?: string;  // optionaler Meeting-Link
 }
 
 interface DeskState {

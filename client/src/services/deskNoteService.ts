@@ -18,8 +18,11 @@ function toNote(doc: ObjectDoc): DeskNote {
     x:          Number(d.x           ?? 0.1),
     y:          Number(d.y           ?? 0.1),
     authorId:   doc.refs?.authorId   ?? String(d.authorId   ?? ''),
-    authorName: String(d.authorName  ?? 'Unbekannt'),
-    createdAt:  String(d.createdAt   ?? new Date().toISOString()),
+    authorName:  String(d.authorName  ?? 'Unbekannt'),
+    createdAt:   String(d.createdAt  ?? new Date().toISOString()),
+    timeStart:   d.timeStart   ? String(d.timeStart)   : undefined,
+    timeEnd:     d.timeEnd     ? String(d.timeEnd)     : undefined,
+    meetingLink: d.meetingLink ? String(d.meetingLink) : undefined,
   };
 }
 
@@ -75,5 +78,17 @@ export async function deleteDeskNote(id: string): Promise<void> {
     await deleteObject(COL, id);
   } catch (err) {
     console.error('[desk] Notiz löschen:', err);
+  }
+}
+
+export async function updateDeskNote(
+  id: string,
+  patch: Partial<Pick<DeskNote, 'text' | 'timeStart' | 'timeEnd' | 'meetingLink'>>,
+): Promise<void> {
+  useDeskStore.getState().updateNote(id, patch);
+  try {
+    await patchObject(COL, id, patch);
+  } catch (err) {
+    console.error('[desk] Notiz aktualisieren:', err);
   }
 }

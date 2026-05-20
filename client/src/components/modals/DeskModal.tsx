@@ -5,7 +5,7 @@ import { usePlayerStore } from '../../model/stores/playerStore';
 import { useFurnitureStore } from '../../model/stores/furnitureStore';
 import { useMessageStore } from '../../model/stores/messageStore';
 import { getJwtUserId } from '../../services/objectClient';
-import { loadDeskNotes, addDeskNote, deleteDeskNote, moveDeskNote } from '../../services/deskNoteService';
+import { loadDeskNotes, addDeskNote, deleteDeskNote, moveDeskNote, updateDeskNote } from '../../services/deskNoteService';
 import { claimDesk, transferDesk, releaseDesk } from '../../services/furnitureService';
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
@@ -287,6 +287,86 @@ const S = {
     fontSize: 14,
   },
 
+  readerTextarea: {
+    width: '100%',
+    background: 'rgba(0,0,0,0.06)',
+    border: '1px solid rgba(0,0,0,0.15)',
+    borderRadius: 6,
+    padding: '8px 10px',
+    fontSize: 14,
+    color: '#1c1917',
+    lineHeight: 1.7,
+    fontFamily: 'inherit',
+    resize: 'vertical' as const,
+    minHeight: 100,
+    outline: 'none',
+    boxSizing: 'border-box' as const,
+    flex: 1,
+  },
+
+  readerFields: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 6,
+  },
+
+  readerFieldLabel: {
+    fontSize: 11,
+    color: '#78716c',
+    fontWeight: 600 as const,
+    display: 'block' as const,
+    marginBottom: 2,
+  },
+
+  readerFieldRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+
+  readerDateInput: {
+    flex: 1,
+    fontSize: 12,
+    border: '1px solid rgba(0,0,0,0.15)',
+    borderRadius: 6,
+    padding: '5px 8px',
+    background: 'rgba(0,0,0,0.06)',
+    color: '#1c1917',
+    outline: 'none',
+    fontFamily: 'inherit',
+    minWidth: 0,
+  } as React.CSSProperties,
+
+  readerUrlInput: {
+    width: '100%',
+    fontSize: 12,
+    border: '1px solid rgba(0,0,0,0.15)',
+    borderRadius: 6,
+    padding: '5px 8px',
+    background: 'rgba(0,0,0,0.06)',
+    color: '#1c1917',
+    outline: 'none',
+    fontFamily: 'inherit',
+    boxSizing: 'border-box' as const,
+  } as React.CSSProperties,
+
+  readerTimeRow: {
+    fontSize: 12,
+    color: '#57534e',
+    padding: '2px 0',
+  },
+
+  readerLink: {
+    display: 'inline-flex' as const,
+    alignItems: 'center',
+    gap: 4,
+    color: '#2563eb',
+    fontSize: 13,
+    fontWeight: 600 as const,
+    textDecoration: 'none',
+    padding: '2px 0',
+  },
+
   loginHint: {
     color: '#64748b',
     fontSize: 12,
@@ -351,6 +431,15 @@ function formatDate(iso: string) {
   } catch {
     return iso;
   }
+}
+
+function toDateTimeLocal(iso: string | undefined): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  } catch { return ''; }
 }
 
 // ── Einzelne Notiz auf dem Tisch ──────────────────────────────────────────────
@@ -483,12 +572,16 @@ const DeskModal: React.FC = () => {
     ? placedItems.find((i) => i.id === openDeskId)?.imageUrl
     : undefined;
 
-  const [noteText,      setNoteText]      = useState('');
-  const [dragOver,      setDragOver]      = useState(false);
-  const [loading,       setLoading]       = useState(false);
-  const [showPicker,    setShowPicker]    = useState(false);
-  const [onlineUsers,   setOnlineUsers]   = useState<PresenceUser[]>([]);
-  const [loadingUsers,  setLoadingUsers]  = useState(false);
+  const [noteText,        setNoteText]        = useState('');
+  const [dragOver,        setDragOver]        = useState(false);
+  const [loading,         setLoading]         = useState(false);
+  const [showPicker,      setShowPicker]      = useState(false);
+  const [onlineUsers,     setOnlineUsers]     = useState<PresenceUser[]>([]);
+  const [loadingUsers,    setLoadingUsers]    = useState(false);
+  const [editText,        setEditText]        = useState('');
+  const [editTimeStart,   setEditTimeStart]   = useState('');
+  const [editTimeEnd,     setEditTimeEnd]     = useState('');
+  const [editMeetingLink, setEditMeetingLink] = useState('');
 
   const deskSurfaceRef = useRef<HTMLDivElement>(null);
 
@@ -500,6 +593,7 @@ const DeskModal: React.FC = () => {
   const canClaim    = jwt !== null && !isGuest && !openDeskOwnerId;
   const canTransfer = isDeskOwner || isAdmin;
   const canRelease  = isDeskOwner || isAdmin;
+  const canEditNote = !!(jwt && readingNote && (isDeskOwner || readingNote.authorId === myId || isAdmin));
 
   const handleOpenMessage = useCallback(() => {
     useMessageStore.getState().setActiveUserId(openDeskOwnerId);
@@ -540,6 +634,18 @@ const DeskModal: React.FC = () => {
     setShowPicker(false);
   }, [openDeskId]);
 
+  const handleSaveNote = useCallback(async () => {
+    if (!readingNote || !canEditNote) return;
+    const patch: Partial<Pick<DeskNote, 'text' | 'timeStart' | 'timeEnd' | 'meetingLink'>> = {
+      text:        editText,
+      timeStart:   editTimeStart   ? new Date(editTimeStart).toISOString()   : undefined,
+      timeEnd:     editTimeEnd     ? new Date(editTimeEnd).toISOString()     : undefined,
+      meetingLink: editMeetingLink || undefined,
+    };
+    await updateDeskNote(readingNote.id, patch);
+    setReadingNote({ ...readingNote, ...patch });
+  }, [readingNote, canEditNote, editText, editTimeStart, editTimeEnd, editMeetingLink, setReadingNote]);
+
   useEffect(() => {
     if (!openDeskId) return;
     setLoading(true);
@@ -547,15 +653,26 @@ const DeskModal: React.FC = () => {
   }, [openDeskId]);
 
   useEffect(() => {
+    if (!readingNote) return;
+    setEditText(readingNote.text);
+    setEditTimeStart(toDateTimeLocal(readingNote.timeStart));
+    setEditTimeEnd(toDateTimeLocal(readingNote.timeEnd));
+    setEditMeetingLink(readingNote.meetingLink ?? '');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readingNote?.id]);
+
+  useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (readingNote) setReadingNote(null);
-        else closeDesk();
+        if (readingNote) {
+          void handleSaveNote();
+          setReadingNote(null);
+        } else closeDesk();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [readingNote, closeDesk, setReadingNote]);
+  }, [readingNote, closeDesk, setReadingNote, handleSaveNote]);
 
   // ── HTML5 DnD — neue Notiz ablegen ────────────────────────────────────────
 
@@ -728,10 +845,83 @@ const DeskModal: React.FC = () => {
 
             {/* Notiz-Leser Overlay */}
             {readingNote && (
-              <div style={S.readerOverlay} onClick={() => setReadingNote(null)}>
+              <div style={S.readerOverlay} onClick={() => { void handleSaveNote(); setReadingNote(null); }}>
                 <div style={S.readerCard} onClick={(e) => e.stopPropagation()}>
-                  <button style={S.readerClose} onClick={() => setReadingNote(null)}>✕</button>
-                  <div style={S.readerText}>{readingNote.text}</div>
+                  <button style={S.readerClose} onClick={() => { void handleSaveNote(); setReadingNote(null); }}>✕</button>
+
+                  {canEditNote ? (
+                    <textarea
+                      style={S.readerTextarea}
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onBlur={handleSaveNote}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+                          e.preventDefault();
+                          void handleSaveNote();
+                        }
+                      }}
+                      autoFocus
+                      placeholder="Notiztext…"
+                      maxLength={1000}
+                    />
+                  ) : (
+                    <div style={S.readerText}>{readingNote.text}</div>
+                  )}
+
+                  {canEditNote && (
+                    <div style={S.readerFields}>
+                      <div>
+                        <span style={S.readerFieldLabel}>Zeitraum</span>
+                        <div style={S.readerFieldRow}>
+                          <input
+                            type="datetime-local"
+                            style={S.readerDateInput}
+                            value={editTimeStart}
+                            onChange={(e) => setEditTimeStart(e.target.value)}
+                            onBlur={handleSaveNote}
+                          />
+                          <span style={{ color: '#78716c', flexShrink: 0 }}>–</span>
+                          <input
+                            type="datetime-local"
+                            style={S.readerDateInput}
+                            value={editTimeEnd}
+                            onChange={(e) => setEditTimeEnd(e.target.value)}
+                            onBlur={handleSaveNote}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <span style={S.readerFieldLabel}>Meeting-Link</span>
+                        <input
+                          type="url"
+                          style={S.readerUrlInput}
+                          value={editMeetingLink}
+                          onChange={(e) => setEditMeetingLink(e.target.value)}
+                          onBlur={handleSaveNote}
+                          placeholder="https://…"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {!canEditNote && (readingNote.timeStart || readingNote.timeEnd) && (
+                    <div style={S.readerTimeRow}>
+                      🕐 {readingNote.timeStart ? formatDate(readingNote.timeStart) : ''}
+                      {readingNote.timeEnd ? ` – ${formatDate(readingNote.timeEnd)}` : ''}
+                    </div>
+                  )}
+                  {!canEditNote && readingNote.meetingLink && (
+                    <a
+                      href={readingNote.meetingLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={S.readerLink}
+                    >
+                      🔗 Meeting öffnen
+                    </a>
+                  )}
+
                   <div style={S.readerMeta}>
                     Von {readingNote.authorName} · {formatDate(readingNote.createdAt)}
                   </div>
