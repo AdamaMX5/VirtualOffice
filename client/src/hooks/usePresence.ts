@@ -41,6 +41,26 @@ function playRingSound() {
   } catch { /* ignore — Browser blockt AudioContext vor User-Interaction */ }
 }
 
+function playChimeSound() {
+  try {
+    const ctx = new AudioContext();
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1047, t);       // C6
+    osc.frequency.setValueAtTime(1319, t + 0.15); // E6
+    osc.frequency.setValueAtTime(1568, t + 0.30); // G6
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.18, t + 0.05);
+    gain.gain.linearRampToValueAtTime(0, t + 0.65);
+    osc.start(t);
+    osc.stop(t + 0.65);
+  } catch { /* ignore */ }
+}
+
 // ── Modul-Level Send-Singleton (wie getRoom() in useLiveKit) ──────────────────
 let _wsSend: ((msg: WsOutbound) => void) | null = null;
 
@@ -161,6 +181,8 @@ export function usePresence() {
             const callerName = usePresenceStore.getState().remoteUsers[data.senderId]?.name ?? 'Jemand';
             useFollowStore.getState().setIncomingCall({ fromUserId: data.senderId, fromName: callerName });
             setTimeout(() => useFollowStore.getState().setIncomingCall(null), 8000);
+          } else if (data.callType === 'appointment') {
+            playChimeSound();
           } else if (data.callType === 'guest_joined') {
             const guestName = data.guestName;
             speakText(guestName ? `${guestName} ist beigetreten` : 'Ein Gast ist beigetreten');

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useReceptionMenuStore } from '../model/stores/receptionMenuStore';
+import { useAuthStore } from '../model/stores/authStore';
 import { presenceSend } from '../hooks/usePresence';
 
 interface OnlineUser {
@@ -70,18 +71,23 @@ const subLabel: React.CSSProperties = {
 
 const ReceptionMenu = () => {
   const { isOpen, screenX, screenY, close } = useReceptionMenuStore();
+  const myId = useAuthStore((s) => s.userId);
+  const jwt  = useAuthStore((s) => s.jwt);
   const [users, setUsers] = useState<OnlineUser[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
     setLoading(true);
-    fetch('/api/presence/users')
+    const headers: HeadersInit = jwt ? { Authorization: `Bearer ${jwt}` } : {};
+    fetch('/api/presence/users', { headers })
       .then((r) => r.json())
-      .then((d: { users: OnlineUser[] }) => setUsers(d.users))
+      .then((d: { users: OnlineUser[] }) =>
+        setUsers(d.users.filter((u) => u.userId !== myId)),
+      )
       .catch(() => setUsers([]))
       .finally(() => setLoading(false));
-  }, [isOpen]);
+  }, [isOpen, myId, jwt]);
 
   useEffect(() => {
     if (!isOpen) return;

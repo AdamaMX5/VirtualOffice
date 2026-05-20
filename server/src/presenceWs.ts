@@ -326,6 +326,7 @@ export function attachPresenceWs(server: Server): void {
     if (pendingInvite) {
       console.log(`[Presence] Gast ${userId} kommt via Einladung von ${pendingInvite.inviterId}`);
     }
+    let guestNotified = false; // Verhindert Doppel-Benachrichtigung bei mehreren set_name
 
     console.log(`[Presence] connect  userId=${userId} remote=${remote} isLocal=${isLocal} botId=${botId ?? '-'} redis=${redisReady ? 'ok' : 'offline'}`);
 
@@ -373,8 +374,9 @@ export function attachPresenceWs(server: Server): void {
               type: 'user_joined', user_id: u.user_id,
               name: u.name, department: u.department, x: u.x, y: u.y,
             });
-            // Einladungsbenachrichtigung nach erstem set_name des Gastes
-            if (pendingInvite && u.user_id.startsWith('g_')) {
+            // Einladungsbenachrichtigung — einmalig beim ersten set_name des Gastes
+            if (pendingInvite && u.user_id.startsWith('g_') && !guestNotified) {
+              guestNotified = true;
               await publishEvent({
                 type: 'notify_user',
                 targetUserId: pendingInvite.inviterId,
