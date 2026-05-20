@@ -105,7 +105,7 @@ interface Props { onClose: () => void; }
 const DesignerPanel = ({ onClose }: Props) => {
   const {
     snapMode, completedRooms, completedWalls, points,
-    deleteRoom, clearAll, savedId, setSavedId,
+    deleteRoom, clearAll, savedId, setSavedId, loadDefault,
   } = useDesignerStore();
   const [saving,      setSaving]      = useState(false);
   const [saveMsg,     setSaveMsg]     = useState('');
@@ -160,7 +160,8 @@ const DesignerPanel = ({ onClose }: Props) => {
           Raster: <span style={snap}>{snapLabel}</span>
           <br />
           <span style={{ color: '#475569' }}>
-            Shift = 0,1 m · Ctrl = 0,01 m · Esc = Abbrechen
+            Shift = 0,1 m · Ctrl = 0,01 m · Esc = Abbrechen<br />
+            Hover auf Punkte = Drag zum Verschieben
           </span>
           {points.length > 0 && (
             <>
@@ -177,7 +178,14 @@ const DesignerPanel = ({ onClose }: Props) => {
 
         {completedRooms.length === 0 ? (
           <div style={{ padding: '8px 16px 12px', color: '#475569', fontSize: 12 }}>
-            Noch keine Räume. Klicke auf den Canvas um Wände zu zeichnen.
+            Noch keine Räume.{' '}
+            <button
+              style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer',
+                fontSize: 12, padding: 0, textDecoration: 'underline' }}
+              onClick={() => { if (window.confirm('Standardlayout laden und bisherige Änderungen verwerfen?')) loadDefault(); }}
+            >
+              Standardlayout laden
+            </button>
           </div>
         ) : (
           completedRooms.map((room, i) => (
@@ -216,6 +224,14 @@ const DesignerPanel = ({ onClose }: Props) => {
             >
               {saving ? '⏳ Speichert…' : `💾 ${savedId ? 'Aktualisieren' : 'Speichern'}`}
               {saveMsg && <span style={{ marginLeft: 8, fontSize: 11, color: '#34d399' }}>{saveMsg}</span>}
+            </button>
+            <button
+              style={{ ...actionBtn, color: '#94a3b8' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(148,163,184,0.08)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+              onClick={() => { if (window.confirm('Standardlayout laden und bisherige Änderungen verwerfen?')) loadDefault(); }}
+            >
+              🏢 Standardlayout laden
             </button>
             <button
               style={{ ...actionBtn, color: '#f87171' }}

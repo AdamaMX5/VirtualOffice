@@ -19,6 +19,7 @@ import FurniturePanel from './furniture/FurniturePanel';
 import MessagesPanel from './messages/MessagesPanel';
 import DesignerLayer from './layers/DesignerLayer';
 import DesignerPanel from './designer/DesignerPanel';
+import DesignerToolbar from './designer/DesignerToolbar';
 import DesignerRoomModal from './modals/DesignerRoomModal';
 import { useDesignerStore } from '../model/stores/designerStore';
 import { usePresence } from '../hooks/usePresence';
@@ -370,7 +371,8 @@ const OfficeCanvas = () => {
       <VirtualJoystick />
       {furnitureModeActive && <FurniturePanel onClose={toggleFurnitureMode} />}
       {messagesPanelOpen  && <MessagesPanel  onClose={closeMessagesPanel} />}
-      {designerActive     && <DesignerPanel  onClose={toggleDesigner} />}
+      {designerActive     && <DesignerPanel   onClose={toggleDesigner} />}
+      {designerActive     && <DesignerToolbar />}
       <DesignerRoomModal />
 
       {/* Follow-Indikator */}
