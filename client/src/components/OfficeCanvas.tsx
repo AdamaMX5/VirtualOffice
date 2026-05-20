@@ -36,6 +36,7 @@ import { usePlayerStore } from '../model/stores/playerStore';
 import { useFurnitureStore } from '../model/stores/furnitureStore';
 import { useMessageStore } from '../model/stores/messageStore';
 import { useMessaging } from '../hooks/useMessaging';
+import { useMapLoader } from '../hooks/useMapLoader';
 import { loadCatalog, loadPlacedItems, placeItem, resizeItem } from '../services/furnitureService';
 import { P, ZOOM_MAX, ZOOM_MIN } from '../model/constants';
 
@@ -69,6 +70,7 @@ const OfficeCanvas = () => {
   // Polling + Echtzeit-Notifications (läuft dauerhaft)
   useMessaging();
   useProfile();
+  useMapLoader();
 
   // Möbel einmalig beim Start laden — alle Räume, kein Filter
   useEffect(() => {

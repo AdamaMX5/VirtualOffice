@@ -1,26 +1,29 @@
 import React, { useMemo } from 'react';
 import { Layer, Line, Text, Arc, Shape } from 'react-konva';
 import { P } from '../../model/constants';
-import { ROOMS, WALLS } from '../../model/mapData';
+import { useMapStore } from '../../model/stores/mapStore';
 
 const BuildingLayer = React.memo(({ x, y, scaleX, scaleY }: {
   x: number; y: number; scaleX: number; scaleY: number;
 }) => {
+  const rooms = useMapStore((s) => s.rooms);
+  const walls = useMapStore((s) => s.walls);
+
   const roomShapes = useMemo(() =>
-    ROOMS.map((room) => {
+    rooms.map((room) => {
       const xs = room.pts.filter((_, i) => i % 2 === 0);
       const ys = room.pts.filter((_, i) => i % 2 === 1);
       const cx = (Math.min(...xs) + Math.max(...xs)) / 2 * P - 40;
       const cy = (Math.min(...ys) + Math.max(...ys)) / 2 * P - 6;
       return { room, cx, cy };
-    }), []);
+    }), [rooms]);
 
   const wallShapes = useMemo(() =>
-    WALLS.map((wall, i) => {
+    walls.map((wall, i) => {
       const x1 = wall.f[0] * P, y1 = wall.f[1] * P;
       const x2 = wall.t[0] * P, y2 = wall.t[1] * P;
       return { wall, x1, y1, x2, y2, key: i };
-    }), []);
+    }), [walls]);
 
   return (
     <Layer x={x} y={y} scaleX={scaleX} scaleY={scaleY}>

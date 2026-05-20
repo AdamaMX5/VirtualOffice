@@ -11,7 +11,8 @@ import { useCameraStore }   from '../model/stores/cameraStore';
 import { usePlayerStore }   from '../model/stores/playerStore';
 import { usePresenceStore } from '../model/stores/presenceStore';
 import { useFurnitureStore } from '../model/stores/furnitureStore';
-import { ROOMS, WALLS }     from '../model/mapData';
+import { useMapStore }       from '../model/stores/mapStore';
+import type { Room, Wall }  from '../model/types';
 import { P, MAP }           from '../model/constants';
 
 // ── Hilfsfunktionen ───────────────────────────────────────────────────────────
@@ -20,7 +21,7 @@ const hex = (s: string): number => parseInt(s.replace('#', ''), 16);
 
 // ── Statischer Layer (Boden + Räume + Wände) ──────────────────────────────────
 
-function buildStaticScene(): Container {
+function buildStaticScene(rooms: Room[], walls: Wall[]): Container {
   const c = new Container();
 
   // Hintergrund
@@ -30,14 +31,14 @@ function buildStaticScene(): Container {
 
   // Raumflächen
   const roomGfx = new Graphics();
-  for (const room of ROOMS) {
+  for (const room of rooms) {
     roomGfx.poly(room.pts.map((v) => v * P)).fill(hex(room.fill));
   }
   c.addChild(roomGfx);
 
   // Raum-Labels
   const labelStyle = new TextStyle({ fontSize: 11, fill: 0xffffff, align: 'center' });
-  for (const room of ROOMS) {
+  for (const room of rooms) {
     const xs = room.pts.filter((_, i) => i % 2 === 0);
     const ys = room.pts.filter((_, i) => i % 2 === 1);
     const cx = ((Math.min(...xs) + Math.max(...xs)) / 2) * P;
@@ -54,7 +55,7 @@ function buildStaticScene(): Container {
   const sharedGfx = new Graphics();
   const doorGfx   = new Graphics();
 
-  for (const w of WALLS) {
+  for (const w of walls) {
     const x1 = w.f[0] * P, y1 = w.f[1] * P;
     const x2 = w.t[0] * P, y2 = w.t[1] * P;
     if (w.type === 'wall')   wallGfx  .moveTo(x1, y1).lineTo(x2, y2);
@@ -159,7 +160,8 @@ const PixiCanvas = () => {
       const world = new Container();
       app.stage.addChild(world);
 
-      world.addChild(buildStaticScene());
+      const { rooms, walls } = useMapStore.getState();
+      world.addChild(buildStaticScene(rooms, walls));
 
       furnitureLayer = new Container();
       avatarLayer    = new Container();

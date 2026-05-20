@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useDesignerStore } from '../../model/stores/designerStore';
+import { useMapStore } from '../../model/stores/mapStore';
 import { createObject, putObject } from '../../services/objectClient';
 import type { Room, Wall } from '../../model/types';
 
@@ -124,11 +125,13 @@ const DesignerPanel = ({ onClose }: Props) => {
         walls: completedWalls as unknown as Record<string, unknown>[],
       };
       if (savedId) {
-        await putObject('floor_plans', savedId, data);
+        await putObject('floor_plans', savedId, data, {}, 'VirtualOffice', true);
       } else {
-        const doc = await createObject('floor_plans', data, {}, 'VirtualOffice', false);
+        const doc = await createObject('floor_plans', data, {}, 'VirtualOffice', true);
         setSavedId(doc._id);
       }
+      // Live-Update der gerenderten Map ohne Page-Reload
+      useMapStore.getState().setMap(completedRooms, completedWalls);
       setSaveMsg('Gespeichert ✓');
     } catch {
       setSaveMsg('Fehler beim Speichern');

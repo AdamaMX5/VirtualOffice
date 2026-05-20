@@ -4,7 +4,7 @@ import { useCameraStore } from '../model/stores/cameraStore';
 import { usePresenceStore } from '../model/stores/presenceStore';
 import { useFollowStore } from '../model/stores/followStore';
 import { MAP, WALK, SPRINT, SEND_INTERVAL, P } from '../model/constants';
-import { getRoomAtPos } from '../model/mapData';
+import { getRoomAtPos } from '../model/stores/mapStore';
 import { useKeyboard } from './useKeyboard';
 
 // Modul-Level Follow-Target (wie presenceSend — von außen setzbar)

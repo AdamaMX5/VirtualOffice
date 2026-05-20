@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useInviteModalStore } from '../../model/stores/inviteModalStore';
 import { useAuthStore } from '../../model/stores/authStore';
 import { usePlayerStore } from '../../model/stores/playerStore';
-import { ROOMS } from '../../model/mapData';
+import { useMapStore } from '../../model/stores/mapStore';
 
 interface OnlineUser { userId: string; name: string; }
 
@@ -67,6 +67,7 @@ const InviteModal: React.FC = () => {
   const jwt        = useAuthStore((s) => s.jwt);
   const myName     = usePlayerStore((s) => s.name);
   const myId       = useAuthStore((s) => s.userId);
+  const rooms      = useMapStore((s) => s.rooms);
 
   const [guestName,       setGuestName]       = useState('');
   const [roomId,          setRoomId]          = useState('');
@@ -166,7 +167,7 @@ const InviteModal: React.FC = () => {
             onChange={(e) => setRoomId(e.target.value)}
           >
             <option value="">– Kein bestimmter Raum –</option>
-            {ROOMS.map((r) => (
+            {rooms.map((r) => (
               <option key={r.label} value={r.label}>{r.label}</option>
             ))}
           </select>
