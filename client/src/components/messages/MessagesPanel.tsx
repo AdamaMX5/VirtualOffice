@@ -273,6 +273,11 @@ const MessagesPanel: React.FC<Props> = ({ onClose }) => {
 
   useEffect(() => { loadInbox(); }, [loadInbox]);
 
+  // Wenn activeUserId extern gesetzt wird (z.B. von DeskModal), Konversation laden
+  useEffect(() => {
+    if (activeUserId) openConversation(activeUserId);
+  }, [activeUserId, openConversation]);
+
   const conversations = buildConversations(inboxMessages, onlineUsers, myId);
   const active = activeUserId
     ? conversations.find((c) => c.userId === activeUserId) ?? {
@@ -319,7 +324,7 @@ const MessagesPanel: React.FC<Props> = ({ onClose }) => {
           {conversations.map((conv) => (
             <div
               key={conv.userId}
-              onClick={() => openConversation(conv.userId)}
+              onClick={() => useMessageStore.getState().setActiveUserId(conv.userId)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '10px 16px', cursor: 'pointer',
