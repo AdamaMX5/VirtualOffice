@@ -121,6 +121,26 @@ const GuestWaitScreen: React.FC = () => {
         <div style={{ color: '#334155', fontSize: 11, lineHeight: 1.5 }}>
           Sie werden automatisch eingelassen, sobald die Einlasszeit erreicht ist.
         </div>
+
+        <button
+          style={{
+            marginTop: 16,
+            padding: '10px 20px',
+            background: 'rgba(100,116,139,0.2)',
+            border: '1px solid rgba(100,116,139,0.35)',
+            borderRadius: 8,
+            color: '#64748b',
+            fontSize: 13,
+            cursor: 'pointer',
+            width: '100%',
+          }}
+          onClick={() => {
+            usePlayerStore.getState().setName(info.guestName || 'Gast');
+            setInfo(null);
+          }}
+        >
+          Trotzdem das Büro betreten
+        </button>
       </div>
     </div>
   );

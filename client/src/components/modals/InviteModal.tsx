@@ -74,6 +74,16 @@ const InviteModal: React.FC = () => {
   const [roomId,          setRoomId]          = useState('');
   const [appointmentTime, setAppointmentTime] = useState('');
   const [inviterUserId,   setInviterUserId]   = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const d = new Date();
+    d.setHours(d.getHours() + 1, 0, 0, 0);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    setAppointmentTime(
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:00`
+    );
+  }, [isOpen]);
   const [onlineUsers,     setOnlineUsers]     = useState<OnlineUser[]>([]);
   const [copied,          setCopied]          = useState(false);
   const [loading,         setLoading]         = useState(false);
@@ -184,6 +194,7 @@ const InviteModal: React.FC = () => {
           <input
             style={S.input}
             type="datetime-local"
+            step="300"
             value={appointmentTime}
             onChange={(e) => setAppointmentTime(e.target.value)}
           />
