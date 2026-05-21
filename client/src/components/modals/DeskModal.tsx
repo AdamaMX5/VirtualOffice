@@ -7,6 +7,7 @@ import { useMessageStore } from '../../model/stores/messageStore';
 import { getJwtUserId } from '../../services/objectClient';
 import { loadDeskNotes, addDeskNote, deleteDeskNote, moveDeskNote, updateDeskNote } from '../../services/deskNoteService';
 import { claimDesk, transferDesk, releaseDesk } from '../../services/furnitureService';
+import { loadProfile } from '../../services/profileClient';
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
@@ -419,6 +420,11 @@ const S = {
   },
 };
 
+// ── Schreibtisch-Typ-Erkennung (synchron mit FurnitureLayer) ──────────────────
+
+const DESK_TYPES = new Set(['desk', 'Schreibtisch', 'Arbeitsplatz', 'Arbeitsplätze']);
+const isDeskType = (type: string) => DESK_TYPES.has(type);
+
 // ── Hilfsfunktionen ───────────────────────────────────────────────────────────
 
 function clamp(v: number, min: number, max: number) {
@@ -572,6 +578,9 @@ const DeskModal: React.FC = () => {
     ? placedItems.find((i) => i.id === openDeskId)?.imageUrl
     : undefined;
 
+  // Aktueller Eigentümer-Name (live aus Profil aufgelöst, Fallback auf gespeicherten Namen)
+  const [resolvedOwnerName, setResolvedOwnerName] = useState(openDeskOwnerName);
+
   const [noteText,        setNoteText]        = useState('');
   const [dragOver,        setDragOver]        = useState(false);
   const [loading,         setLoading]         = useState(false);
@@ -590,7 +599,10 @@ const DeskModal: React.FC = () => {
     && openDeskOwnerId
     && openDeskOwnerId !== myId
     && !openDeskOwnerId.startsWith('bot_');
-  const canClaim    = jwt !== null && !isGuest && !openDeskOwnerId;
+  const hasOwnDesk  = !!myId && placedItems.some(
+    (item) => isDeskType(item.type) && item.deskUserId === myId,
+  );
+  const canClaim    = jwt !== null && !isGuest && !openDeskOwnerId && !hasOwnDesk;
   const canTransfer = isDeskOwner || isAdmin;
   const canRelease  = isDeskOwner || isAdmin;
   const canEditNote = !!(jwt && readingNote && (isDeskOwner || readingNote.authorId === myId || isAdmin));
@@ -642,15 +654,30 @@ const DeskModal: React.FC = () => {
       timeEnd:     editTimeEnd     ? new Date(editTimeEnd).toISOString()     : undefined,
       meetingLink: editMeetingLink || undefined,
     };
+    // updateDeskNote aktualisiert bereits den notes-Array im Store.
+    // Kein setReadingNote danach — das würde den Reader nach dem Schließen wieder öffnen.
     await updateDeskNote(readingNote.id, patch);
-    setReadingNote({ ...readingNote, ...patch });
-  }, [readingNote, canEditNote, editText, editTimeStart, editTimeEnd, editMeetingLink, setReadingNote]);
+  }, [readingNote, canEditNote, editText, editTimeStart, editTimeEnd, editMeetingLink]);
 
   useEffect(() => {
     if (!openDeskId) return;
     setLoading(true);
     loadDeskNotes(openDeskId).finally(() => setLoading(false));
   }, [openDeskId]);
+
+  // Eigentümer-Name live aus Profil auflösen (korrekter Name nach Umbenennungen)
+  useEffect(() => {
+    setResolvedOwnerName(openDeskOwnerName);
+    if (!openDeskOwnerId) return;
+    loadProfile(openDeskOwnerId)
+      .then((res) => {
+        if (!res) return;
+        const { firstName, lastName } = res.profile;
+        const name = [firstName, lastName].filter(Boolean).join(' ');
+        if (name) setResolvedOwnerName(name);
+      })
+      .catch(() => {});
+  }, [openDeskOwnerId, openDeskOwnerName]);
 
   useEffect(() => {
     if (!readingNote) return;
@@ -740,7 +767,7 @@ const DeskModal: React.FC = () => {
         {/* Header */}
         <div style={S.header}>
           <h2 style={S.title}>
-            {openDeskOwnerName ? `${openDeskOwnerName}'s Schreibtisch` : 'Freier Schreibtisch'}
+            {resolvedOwnerName ? `${resolvedOwnerName}'s Schreibtisch` : 'Freier Schreibtisch'}
           </h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {canMessage && (
@@ -756,13 +783,18 @@ const DeskModal: React.FC = () => {
         <div style={S.ownerBar}>
           <span style={S.ownerLabel}>
             {openDeskOwnerId
-              ? `👤 ${openDeskOwnerName}`
+              ? `👤 ${resolvedOwnerName || openDeskOwnerName}`
               : '🪑 Kein Eigentümer'}
           </span>
           {canClaim && (
             <button style={S.ownerBtn('#34d399')} onClick={handleClaim}>
               Annektieren
             </button>
+          )}
+          {jwt && !isGuest && !openDeskOwnerId && hasOwnDesk && (
+            <span style={{ color: '#f59e0b', fontSize: 12 }}>
+              Du hast bereits einen Schreibtisch
+            </span>
           )}
           {canTransfer && openDeskOwnerId && (
             <button style={S.ownerBtn('#60a5fa')} onClick={openUserPicker}>
