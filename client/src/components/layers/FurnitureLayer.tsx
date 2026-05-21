@@ -173,7 +173,11 @@ const FurnitureLayer: React.FC<LayerProps> = ({ x, y, scaleX, scaleY }) => {
         borderStroke="rgba(99,179,237,0.85)"
         borderStrokeWidth={2}
         borderDash={[6, 3]}
-        anchorSize={0}
+        anchorSize={16}
+        anchorCornerRadius={8}
+        anchorFill="#0f172a"
+        anchorStroke="rgba(99,179,237,0.9)"
+        anchorStrokeWidth={2}
       />
     </Layer>
   );

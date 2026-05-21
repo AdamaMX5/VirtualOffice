@@ -14,6 +14,7 @@ import { getJwtUserId, deleteMedia, MediaFile } from '../../services/objectClien
 import {
   uploadCatalogItem, registerCatalogItem, listOrphanedMedia,
   deleteItem, deleteCatalogItem, deleteCatalogItemWithMedia, updateCatalogItem,
+  resizeItem, rotateItem,
 } from '../../services/furnitureService';
 
 const PRESET_GROUPS = ['Arbeitsplätze', 'Sitzgelegenheiten', 'Boards', 'Dekoration', 'Sonstiges'];
@@ -439,15 +440,77 @@ const FurniturePanel: React.FC<Props> = ({ onClose }) => {
             border: '1px solid rgba(255,255,255,0.12)',
             borderRadius: 8, fontSize: 12,
           }}>
-            <div style={{ marginBottom: 8, color: 'rgba(255,255,255,0.6)' }}>
+            <div style={{ marginBottom: 10, color: 'rgba(255,255,255,0.6)' }}>
               Ausgewählt: <b style={{ color: '#fff' }}>{selectedPlaced.type}</b>
-              <span style={{ marginLeft: 8, opacity: 0.4 }}>
-                {selectedPlaced.width.toFixed(1)}×{selectedPlaced.height.toFixed(1)} Tiles · {Math.round(selectedPlaced.rotation)}°
+            </div>
+
+            {/* Größensteuerung */}
+            {[
+              { label: 'Breite', val: selectedPlaced.width,  other: selectedPlaced.height, isW: true  },
+              { label: 'Höhe',   val: selectedPlaced.height, other: selectedPlaced.width,  isW: false },
+            ].map(({ label, val, other, isW }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', width: 36, flexShrink: 0 }}>{label}</span>
+                <button
+                  style={{
+                    width: 26, height: 26, flexShrink: 0,
+                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: 6, color: '#fff', fontSize: 16, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                  }}
+                  onClick={() => resizeItem(
+                    selectedPlaced.id,
+                    isW ? Math.max(0.5, val - 0.5) : other,
+                    isW ? other : Math.max(0.5, val - 0.5),
+                  )}
+                >−</button>
+                <span style={{ flex: 1, textAlign: 'center', color: '#e2e8f0', fontFamily: 'monospace', fontSize: 12 }}>
+                  {val.toFixed(1)} Tiles
+                </span>
+                <button
+                  style={{
+                    width: 26, height: 26, flexShrink: 0,
+                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: 6, color: '#fff', fontSize: 16, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                  }}
+                  onClick={() => resizeItem(
+                    selectedPlaced.id,
+                    isW ? val + 0.5 : other,
+                    isW ? other : val + 0.5,
+                  )}
+                >+</button>
+              </div>
+            ))}
+
+            {/* Rotationssteuerung */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 10 }}>
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', width: 36, flexShrink: 0 }}>Winkel</span>
+              <button
+                style={{
+                  width: 26, height: 26, flexShrink: 0,
+                  background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: 6, color: '#fff', fontSize: 14, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+                title="45° links drehen"
+                onClick={() => rotateItem(selectedPlaced.id, ((selectedPlaced.rotation - 45) + 360) % 360)}
+              >↺</button>
+              <span style={{ flex: 1, textAlign: 'center', color: '#e2e8f0', fontFamily: 'monospace', fontSize: 12 }}>
+                {Math.round(selectedPlaced.rotation)}°
               </span>
+              <button
+                style={{
+                  width: 26, height: 26, flexShrink: 0,
+                  background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: 6, color: '#fff', fontSize: 14, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+                title="45° rechts drehen"
+                onClick={() => rotateItem(selectedPlaced.id, (selectedPlaced.rotation + 45) % 360)}
+              >↻</button>
             </div>
-            <div style={{ fontSize: 10, opacity: 0.45, marginBottom: 8 }}>
-              Scrollen mit 🖱 gedrückt = Größe ändern · Rotationsgriff = drehen
-            </div>
+
             <button
               style={btnStyle('rgba(239,68,68,0.75)')}
               onClick={handleDeleteSelected}
