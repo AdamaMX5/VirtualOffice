@@ -1,24 +1,19 @@
 /**
  * useInviteBoot – liest den ?invite=TOKEN aus der URL, holt Einladungsdaten
- * vom Server und setzt den Gastnamen automatisch, ohne das Login-Modal zu zeigen.
- * Läuft einmalig beim App-Start.
+ * direkt vom ObjectService und setzt den Gastnamen automatisch, ohne das
+ * Login-Modal zu zeigen. Läuft einmalig beim App-Start.
  */
 import { useEffect } from 'react';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useAuthStore } from '../model/stores/authStore';
 import { useGuestWaitStore } from '../model/stores/guestWaitStore';
+import { listObjects } from '../services/objectClient';
 
 const _inviteToken = typeof window !== 'undefined'
   ? new URLSearchParams(window.location.search).get('invite')
   : null;
 
-interface InviteInfo {
-  status:          'valid' | 'too_early';
-  guestName:       string;
-  inviterName:     string;
-  roomId:          string | null;
-  appointmentTime: number | null;
-}
+const EARLY_WINDOW_MS = 15 * 60 * 1000;
 
 export function useInviteBoot(): void {
   useEffect(() => {
@@ -29,23 +24,25 @@ export function useInviteBoot(): void {
     // Modal sofort schließen — Gast bekommt Namen aus der Einladung
     useAuthStore.getState().closeModal();
 
-    fetch(`/api/invite/${encodeURIComponent(_inviteToken)}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(r.status === 404 ? 'not_found' : 'error');
-        return r.json() as Promise<InviteInfo>;
-      })
-      .then((info) => {
-        if (info.status === 'too_early' && info.appointmentTime) {
-          // Termin liegt noch in der Zukunft — Wartescreen zeigen (kein Login-Modal)
+    listObjects('invitations', { 'ref[token]': _inviteToken, app: 'VirtualOffice' })
+      .then((docs) => {
+        if (docs.length === 0) throw new Error('not_found');
+        const d = docs[0].data;
+        const expiresAt = Number(d.expiresAt ?? 0);
+        if (Date.now() > expiresAt) throw new Error('expired');
+
+        const appointmentTime = d.appointmentTime ? Number(d.appointmentTime) : null;
+        const guestName       = String(d.guestName   ?? 'Gast');
+        const inviterName     = String(d.inviterName  ?? '');
+
+        if (appointmentTime && Date.now() < appointmentTime - EARLY_WINDOW_MS) {
           useGuestWaitStore.getState().setTooEarlyInfo({
-            guestName:       info.guestName,
-            inviterName:     info.inviterName,
-            appointmentTime: info.appointmentTime,
+            guestName, inviterName, appointmentTime,
           });
           return;
         }
-        const name = info.guestName || 'Gast';
-        usePlayerStore.getState().setName(name);
+
+        usePlayerStore.getState().setName(guestName || 'Gast');
       })
       .catch(() => {
         // Token unbekannt oder abgelaufen → normales Modal zeigen

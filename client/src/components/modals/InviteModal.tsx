@@ -3,6 +3,7 @@ import { useInviteModalStore } from '../../model/stores/inviteModalStore';
 import { useAuthStore } from '../../model/stores/authStore';
 import { usePlayerStore } from '../../model/stores/playerStore';
 import { useMapStore } from '../../model/stores/mapStore';
+import { createObject } from '../../services/objectClient';
 
 interface OnlineUser { userId: string; name: string; }
 
@@ -113,29 +114,33 @@ const InviteModal: React.FC = () => {
     setLoading(true); setError('');
     try {
       const inviterName = onlineUsers.find((u) => u.userId === inviterUserId)?.name ?? myName;
-      const body: Record<string, unknown> = {
-        inviterName,
-        guestName: guestName.trim(),
-      };
-      if (roomId)          body.roomId          = roomId;
-      if (appointmentTime) body.appointmentTime = new Date(appointmentTime).getTime();
+      const inviterId   = inviterUserId || myId || '';
+      const tokenBytes  = crypto.getRandomValues(new Uint8Array(16));
+      const token       = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      const expiresAt   = Date.now() + 24 * 60 * 60 * 1000;
+      const apptTime    = appointmentTime ? new Date(appointmentTime).getTime() : null;
 
-      const res = await fetch('/api/invite/create', {
-        method:  'POST',
-        headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-      });
-      if (!res.ok) { setError('Fehler beim Erstellen der Einladung.'); return; }
-      const { token } = await res.json() as { token: string };
-      const url = `${window.location.origin}?invite=${token}`;
-      await navigator.clipboard.writeText(url);
+      await createObject(
+        'invitations',
+        {
+          token, inviterId, inviterName,
+          guestName:       guestName.trim(),
+          roomId:          roomId || null,
+          appointmentTime: apptTime,
+          expiresAt,
+          createdAt:       Date.now(),
+        },
+        { token, inviterId },
+      );
+
+      await navigator.clipboard.writeText(`${window.location.origin}?invite=${token}`);
       setCopied(true);
     } catch {
       setError('Fehler beim Erstellen der Einladung.');
     } finally {
       setLoading(false);
     }
-  }, [guestName, roomId, appointmentTime, inviterUserId, myName, onlineUsers, jwt]);
+  }, [guestName, roomId, appointmentTime, inviterUserId, myId, myName, onlineUsers]);
 
   if (!isOpen) return null;
 

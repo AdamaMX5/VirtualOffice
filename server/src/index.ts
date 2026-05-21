@@ -10,7 +10,6 @@ import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxie
 import { attachPresenceWs, getConnectedUsers, decodeJwtPayload } from './presenceWs';
 import { startReceptionBot, startAdminBot } from './presence';
 import { fetchCalendarEvents } from './calendarProxy';
-import { createInviteToken, getInviteEntry, getInviteAccessStatus } from './inviteTokens';
 
 const app = express();
 
@@ -114,50 +113,6 @@ app.post('/api/livekit/egress/stop', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
-
-// ── Einladungs-Token ──────────────────────────────────────────
-
-app.post('/api/invite/create', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const jwt = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!jwt) { res.status(401).json({ error: 'Nicht eingeloggt' }); return; }
-  const payload = decodeJwtPayload(jwt);
-  const inviterId = payload ? String(payload.id ?? payload.userId ?? payload.sub ?? '') : '';
-  if (!inviterId) { res.status(401).json({ error: 'Ungültiger Token' }); return; }
-
-  const body = req.body as Record<string, unknown>;
-  const inviterName      = String(body.inviterName ?? body.name ?? '');
-  const guestName        = String(body.guestName   ?? 'Gast');
-  const roomId           = body.roomId ? String(body.roomId) : undefined;
-  const appointmentTime  = body.appointmentTime ? Number(body.appointmentTime) : undefined;
-
-  try {
-    const token = await createInviteToken(inviterId, inviterName, guestName, roomId, appointmentTime, jwt);
-    console.log(`[Invite] Token erstellt für ${inviterId} (${inviterName}) → Gast: ${guestName}, Raum: ${roomId ?? '–'}`);
-    res.json({ token });
-  } catch (err) {
-    console.error('[Invite] Token-Erstellung fehlgeschlagen:', err);
-    res.status(502).json({ error: 'Einladung konnte nicht gespeichert werden' });
-  }
-});
-
-app.get('/api/invite/:token', async (req, res) => {
-  const { token } = req.params as { token: string };
-  const status = await getInviteAccessStatus(token);
-  if (status === 'not_found' || status === 'expired') {
-    res.status(404).json({ error: status });
-    return;
-  }
-  const entry = await getInviteEntry(token);
-  if (!entry) { res.status(404).json({ error: 'not_found' }); return; }
-  res.json({
-    status,
-    guestName:       entry.guestName,
-    inviterName:     entry.inviterName,
-    roomId:          entry.roomId ?? null,
-    appointmentTime: entry.appointmentTime ?? null,
-  });
 });
 
 // ── Online-Nutzer (für Empfangsmenü) ─────────────────────────
