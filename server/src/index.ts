@@ -132,40 +132,25 @@ app.post('/api/invite/create', async (req, res) => {
   const roomId           = body.roomId ? String(body.roomId) : undefined;
   const appointmentTime  = body.appointmentTime ? Number(body.appointmentTime) : undefined;
 
-  const token = createInviteToken(inviterId, inviterName, guestName, roomId, appointmentTime);
-  console.log(`[Invite] Token erstellt für ${inviterId} (${inviterName}) → Gast: ${guestName}, Raum: ${roomId ?? '–'}`);
-
-  // Persistenz im ObjectService (fire-and-forget, Fehler nicht fatal)
-  fetch(`${config.OBJECT_URL}/objects/invitations`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
-    body: JSON.stringify({
-      data: {
-        token,
-        guestName,
-        roomId:          roomId ?? null,
-        appointmentTime: appointmentTime ?? null,
-        inviterId,
-        inviterName,
-        createdAt: Date.now(),
-      },
-      refs:     { inviterId },
-      isPublic: false,
-      app:      'VirtualOffice',
-    }),
-  }).catch((err) => console.warn('[Invite] ObjectService-Persistenz fehlgeschlagen:', err));
-
-  res.json({ token });
+  try {
+    const token = await createInviteToken(inviterId, inviterName, guestName, roomId, appointmentTime, jwt);
+    console.log(`[Invite] Token erstellt für ${inviterId} (${inviterName}) → Gast: ${guestName}, Raum: ${roomId ?? '–'}`);
+    res.json({ token });
+  } catch (err) {
+    console.error('[Invite] Token-Erstellung fehlgeschlagen:', err);
+    res.status(502).json({ error: 'Einladung konnte nicht gespeichert werden' });
+  }
 });
 
-app.get('/api/invite/:token', (req, res) => {
+app.get('/api/invite/:token', async (req, res) => {
   const { token } = req.params as { token: string };
-  const status = getInviteAccessStatus(token);
+  const status = await getInviteAccessStatus(token);
   if (status === 'not_found' || status === 'expired') {
     res.status(404).json({ error: status });
     return;
   }
-  const entry = getInviteEntry(token)!;
+  const entry = await getInviteEntry(token);
+  if (!entry) { res.status(404).json({ error: 'not_found' }); return; }
   res.json({
     status,
     guestName:       entry.guestName,
@@ -180,7 +165,7 @@ app.get('/api/invite/:token', (req, res) => {
 app.get('/api/presence/users', (_req, res) => {
   const users = getConnectedUsers()
     .filter((u) => !u.user_id.startsWith('bot_') && !u.user_id.startsWith('g_'))
-    .map((u) => ({ userId: u.user_id, name: u.name, department: u.department }));
+    .map((u) => ({ userId: u.user_id, name: u.name, department: u.department, title: u.title }));
   res.json({ users });
 });
 

@@ -326,7 +326,7 @@ export function attachPresenceWs(server: Server): void {
     const userId       = resolveUserId(token, userIdParam, botId, isLocal);
 
     // Einladungs-Token auflösen: Einlader wird benachrichtigt wenn Gast beitritt
-    const pendingInvite = inviteToken ? resolveInviteToken(inviteToken) : null;
+    const pendingInvite = inviteToken ? await resolveInviteToken(inviteToken) : null;
     if (pendingInvite) {
       console.log(`[Presence] Gast ${userId} kommt via Einladung von ${pendingInvite.inviterId}`);
     }

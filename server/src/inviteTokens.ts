@@ -1,6 +1,18 @@
+/**
+ * inviteTokens – Einladungs-Token im ObjectService speichern und abfragen.
+ *
+ * Der ObjectService ist die einzige Quelle der Wahrheit (kein lokaler Datei-Speicher).
+ * Ein kurzer In-Memory-Cache (5 Minuten TTL) verhindert unnötige HTTP-Anfragen
+ * beim wiederholten Lesen desselben Tokens (z.B. GET-Endpoint + WS-Connect).
+ *
+ * ObjectService-Collection: 'invitations'
+ *   data:  { token, inviterId, inviterName, guestName, roomId, appointmentTime, expiresAt, createdAt }
+ *   refs:  { token, inviterId }   ← ref[token]-Suche nutzt den Wildcard-Index
+ *   isPublic: true                ← Token ist die Auth-Barriere (128-Bit-Zufallswert)
+ */
+
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
+import { config } from './config';
 
 export interface InviteEntry {
   inviterId:        string;
@@ -21,86 +33,144 @@ export const ROOM_STARTS: Record<string, { x: number; y: number }> = {
   'Serverraum':    { x: 95, y: 53 },
 };
 
-const EARLY_WINDOW_MS = 15 * 60 * 1000; // 15 Minuten Vorlaufzeit
+const EARLY_WINDOW_MS = 15 * 60 * 1000;
+const COLLECTION      = 'invitations';
 
-// ── Datei-Persistenz ──────────────────────────────────────────────────────────
+// ── In-Memory-Cache (5 Minuten TTL) ──────────────────────────────────────────
 
-const DATA_DIR    = path.join(__dirname, '..', 'data');
-const TOKENS_FILE = path.join(DATA_DIR, 'invite-tokens.json');
-
-function persist(map: Map<string, InviteEntry>): void {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(TOKENS_FILE, JSON.stringify(Object.fromEntries(map), null, 2), 'utf8');
-  } catch (e) {
-    console.warn('[Invite] Persistenz fehlgeschlagen:', e);
-  }
+interface CacheEntry {
+  entry:    InviteEntry;
+  cachedAt: number;
 }
 
-function loadFromDisk(): Map<string, InviteEntry> {
-  try {
-    const raw = fs.readFileSync(TOKENS_FILE, 'utf8');
-    const obj = JSON.parse(raw) as Record<string, InviteEntry>;
-    const now = Date.now();
-    const map = new Map<string, InviteEntry>();
-    for (const [token, entry] of Object.entries(obj)) {
-      if (now <= entry.expiresAt) map.set(token, entry); // abgelaufene Token verwerfen
-    }
-    if (map.size > 0) console.log(`[Invite] ${map.size} Token(s) aus Datei geladen`);
-    return map;
-  } catch {
-    return new Map();
-  }
+const cache     = new Map<string, CacheEntry>();
+const CACHE_TTL = 5 * 60 * 1000;
+
+function cacheGet(token: string): InviteEntry | null {
+  const c = cache.get(token);
+  if (!c) return null;
+  if (Date.now() - c.cachedAt > CACHE_TTL) { cache.delete(token); return null; }
+  return c.entry;
 }
 
-const tokens = loadFromDisk();
+// ── ObjectService-Abfrage ─────────────────────────────────────────────────────
+
+type ObjDoc = { _id: string; data: Record<string, unknown> };
+
+function parseList(body: unknown): ObjDoc[] {
+  if (Array.isArray(body)) return body as ObjDoc[];
+  const b = body as Record<string, unknown>;
+  if (Array.isArray(b.objects)) return b.objects as ObjDoc[];
+  if (Array.isArray(b.items))   return b.items   as ObjDoc[];
+  if (Array.isArray(b.data))    return b.data    as ObjDoc[];
+  return [];
+}
+
+function docToEntry(d: Record<string, unknown>): InviteEntry {
+  return {
+    inviterId:       String(d.inviterId       ?? ''),
+    inviterName:     String(d.inviterName     ?? ''),
+    guestName:       String(d.guestName       ?? 'Gast'),
+    roomId:          d.roomId          ? String(d.roomId)          : undefined,
+    appointmentTime: d.appointmentTime ? Number(d.appointmentTime) : undefined,
+    expiresAt:       Number(d.expiresAt       ?? 0),
+  };
+}
+
+/** Sucht ein Token im ObjectService (isPublic=true, kein Auth nötig). */
+async function fetchFromStore(token: string): Promise<InviteEntry | null> {
+  try {
+    const url = `${config.OBJECT_URL}/objects/${COLLECTION}?ref[token]=${encodeURIComponent(token)}&app=VirtualOffice`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const docs = parseList(await res.json());
+    if (docs.length === 0) return null;
+    const entry = docToEntry(docs[0].data);
+    cache.set(token, { entry, cachedAt: Date.now() });
+    return entry;
+  } catch (err) {
+    console.warn('[Invite] ObjectService-Abfrage fehlgeschlagen:', (err as Error).message);
+    return null;
+  }
+}
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function createInviteToken(
-  inviterId: string,
-  inviterName: string,
-  guestName: string,
-  roomId?: string,
+/**
+ * Erstellt einen Einladungs-Token und speichert ihn im ObjectService.
+ * jwt: Bearer-Token des einladenden Nutzers (für die POST-Anfrage).
+ */
+export async function createInviteToken(
+  inviterId:        string,
+  inviterName:      string,
+  guestName:        string,
+  roomId?:          string,
   appointmentTime?: number,
-): string {
-  const token = crypto.randomBytes(16).toString('hex');
-  tokens.set(token, {
+  jwt?:             string,
+): Promise<string> {
+  const token     = crypto.randomBytes(16).toString('hex');
+  const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 h
+  const data = {
+    token,
     inviterId,
     inviterName,
     guestName,
-    roomId,
-    appointmentTime,
-    expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24h
+    roomId:          roomId          ?? null,
+    appointmentTime: appointmentTime ?? null,
+    expiresAt,
+    createdAt: Date.now(),
+  };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
+
+  const res = await fetch(`${config.OBJECT_URL}/objects/${COLLECTION}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      data,
+      refs:     { token, inviterId },
+      isPublic: true,
+      app:      'VirtualOffice',
+    }),
   });
-  persist(tokens);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as Record<string, unknown>;
+    throw new Error(String(err.error ?? err.detail ?? 'Einladung speichern fehlgeschlagen'));
+  }
+  const doc = await res.json() as { _id: string };
+  console.log(`[Invite] Token gespeichert (ObjectService) docId=${doc._id}`);
+
+  // Direkt in Cache schreiben — spart sofortigen Re-Fetch
+  const entry: InviteEntry = { inviterId, inviterName, guestName, roomId, appointmentTime, expiresAt };
+  cache.set(token, { entry, cachedAt: Date.now() });
   return token;
 }
 
-/** Liest Einladungsdaten ohne das Token zu verbrauchen (für GET-Endpoint). */
-export function getInviteEntry(token: string): InviteEntry | null {
-  const entry = tokens.get(token);
+/** Liest Einladungsdaten ohne Verbrauch (für GET /api/invite/:token). */
+export async function getInviteEntry(token: string): Promise<InviteEntry | null> {
+  const entry = cacheGet(token) ?? await fetchFromStore(token);
   if (!entry) return null;
-  if (Date.now() > entry.expiresAt) { tokens.delete(token); persist(tokens); return null; }
+  if (Date.now() > entry.expiresAt) return null;
   return entry;
 }
 
 export type InviteAccessStatus = 'valid' | 'too_early' | 'expired' | 'not_found';
 
-export function getInviteAccessStatus(token: string): InviteAccessStatus {
-  const entry = tokens.get(token);
+export async function getInviteAccessStatus(token: string): Promise<InviteAccessStatus> {
+  const entry = cacheGet(token) ?? await fetchFromStore(token);
   if (!entry) return 'not_found';
-  if (Date.now() > entry.expiresAt) { tokens.delete(token); persist(tokens); return 'expired'; }
+  if (Date.now() > entry.expiresAt) return 'expired';
   if (entry.appointmentTime && Date.now() < entry.appointmentTime - EARLY_WINDOW_MS) return 'too_early';
   return 'valid';
 }
 
-/** Liest und verbraucht das Token (single-use, für WS-Verbindung). */
-export function resolveInviteToken(token: string): InviteEntry | null {
-  const entry = tokens.get(token);
+/**
+ * Liest das Token für den WS-Verbindungsaufbau.
+ * Token bleibt im ObjectService bestehen — Gast kann die Seite neu laden.
+ */
+export async function resolveInviteToken(token: string): Promise<InviteEntry | null> {
+  const entry = cacheGet(token) ?? await fetchFromStore(token);
   if (!entry) return null;
-  if (Date.now() > entry.expiresAt) { tokens.delete(token); persist(tokens); return null; }
-  tokens.delete(token); // single-use
-  persist(tokens);
+  if (Date.now() > entry.expiresAt) return null;
   return entry;
 }
