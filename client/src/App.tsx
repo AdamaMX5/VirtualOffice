@@ -16,9 +16,11 @@ import ReceptionMenu from './components/ReceptionMenu';
 import { useContextMenuStore } from './model/stores/contextMenuStore';
 import { useReceptionMenuStore } from './model/stores/receptionMenuStore';
 import { useInviteBoot } from './hooks/useInviteBoot';
+import { useProfileBoot } from './hooks/useProfileBoot';
 
 const App = () => {
   useInviteBoot();
+  useProfileBoot();
 
   const showModal         = useAuthStore((s) => s.showModal);
   const openDeskId        = useDeskStore((s) => s.openDeskId);

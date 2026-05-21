@@ -8,6 +8,8 @@ export interface UserProfile {
   firstName: string;
   lastName: string;
   department: string;
+  title: string;       // Berufsbezeichnung / Stellenbezeichnung
+  email: string;       // E-Mail-Adresse (aus authStore beim Speichern befüllt)
   avatarUrl: string;
   calendarUrl: string;
 }

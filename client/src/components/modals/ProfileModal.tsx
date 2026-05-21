@@ -236,6 +236,7 @@ const ProfileModal = () => {
   const [firstName,   setFirstName]   = useState('');
   const [lastName,    setLastName]    = useState('');
   const [department,  setDepartment]  = useState('');
+  const [title,       setTitle]       = useState('');
   const [calendarUrl, setCalendarUrl] = useState('');
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState<string | null>(null);
@@ -270,6 +271,7 @@ const ProfileModal = () => {
       setFirstName(res.profile.firstName   ?? '');
       setLastName(res.profile.lastName     ?? '');
       setDepartment(res.profile.department ?? '');
+      setTitle(res.profile.title           ?? '');
       setCalendarUrl(res.profile.calendarUrl ?? '');
       if (res.profile.avatarUrl) setPreviewUrl(res.profile.avatarUrl);
       if (res.profile.calendarUrl) loadCalendar(res.profile.calendarUrl);
@@ -363,12 +365,15 @@ const ProfileModal = () => {
         const { url } = await uploadMedia(file, 'VirtualOffice', 'avatars');
         avatarUrl = url;
       }
-      const profile = { firstName, lastName, department, avatarUrl, calendarUrl: calendarUrl.trim() };
+      const email = useAuthStore.getState().email ?? '';
+      const profile = { firstName, lastName, department, title, email, avatarUrl, calendarUrl: calendarUrl.trim() };
       await saveProfile(profile);
 
-      const displayName = [firstName, lastName].filter(Boolean).join(' ') || (useAuthStore.getState().email ?? '');
+      const displayName = [firstName, lastName].filter(Boolean).join(' ') || email;
       setName(displayName);
-      presenceSend({ type: 'set_name', name: displayName, department: department || undefined });
+      usePlayerStore.getState().setDepartment(department);
+      usePlayerStore.getState().setTitle(title);
+      presenceSend({ type: 'set_name', name: displayName, department: department || undefined, title: title || undefined });
       setAvatarUrl(avatarUrl || null);
       close();
     } catch (err) {
@@ -438,6 +443,10 @@ const ProfileModal = () => {
             <div>
               <div style={S.label}>Abteilung</div>
               <input style={S.input} value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="z.B. Entwicklung" />
+            </div>
+            <div>
+              <div style={S.label}>Berufsbezeichnung</div>
+              <input style={S.input} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="z.B. Senior Developer" />
             </div>
 
             <div style={S.divider} />

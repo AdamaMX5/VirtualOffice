@@ -88,7 +88,9 @@ export function usePresence() {
   const { jwt, authStatus, email } = useAuthStore();
   const { setStatus } = useAuthStore();
   const { applySnapshot, addOrUpdateUser, moveUser, removeUser, setWsStatus, setReconnectDelay, resetUsers } = usePresenceStore();
-  const name   = usePlayerStore((s) => s.name);
+  const name       = usePlayerStore((s) => s.name);
+  const department = usePlayerStore((s) => s.department);
+  const title      = usePlayerStore((s) => s.title);
   const userId = useAuthStore((s) => s.userId);
 
   const socketRef       = useRef<WebSocket | null>(null);
@@ -99,11 +101,15 @@ export function usePresence() {
   const jwtRef          = useRef(jwt);
   const userIdRef       = useRef(userId);
   const emailRef        = useRef(email);
+  const departmentRef   = useRef(department);
+  const titleRef        = useRef(title);
 
-  nameRef.current   = name;
-  jwtRef.current    = jwt;
-  userIdRef.current = userId;
-  emailRef.current  = email;
+  nameRef.current       = name;
+  jwtRef.current        = jwt;
+  userIdRef.current     = userId;
+  emailRef.current      = email;
+  departmentRef.current = department;
+  titleRef.current      = title;
 
   const connect = useCallback(() => {
     if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
@@ -137,7 +143,12 @@ export function usePresence() {
         const displayName = (nameRef.current && nameRef.current !== '...')
           ? nameRef.current
           : emailRef.current;
-        ws.send(JSON.stringify({ type: 'set_name', name: displayName }));
+        ws.send(JSON.stringify({
+          type: 'set_name',
+          name: displayName,
+          department: departmentRef.current || undefined,
+          title: titleRef.current || undefined,
+        }));
         setStatus('connected_auth');
       }
     };
@@ -158,6 +169,7 @@ export function usePresence() {
             user_id:    data.user_id,
             name:       data.name,
             department: data.department,
+            title:      data.title,
             x:          data.x,
             y:          data.y,
           });

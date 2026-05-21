@@ -7,6 +7,8 @@ import { useAuthStore } from '../model/stores/authStore';
 import { setFollowTarget } from '../hooks/useGameLoop';
 import { presenceSend } from '../hooks/usePresence';
 import { createObject, getJwtUserId } from '../services/objectClient';
+import { loadProfile } from '../services/profileClient';
+import type { UserProfile } from '../services/profileClient';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -109,6 +111,9 @@ const AvatarContextMenu = () => {
   const { isOpen, targetUserId, targetName, screenX, screenY, close } = useContextMenuStore();
   const [view, setView] = useState<'menu' | 'appointment'>('menu');
 
+  // Profil des Zielnutzers
+  const [targetProfile, setTargetProfile] = useState<UserProfile | null>(null);
+
   // Appointment-State
   const [aptTitle,    setAptTitle]    = useState('');
   const [aptDate,     setAptDate]     = useState(todayStr);
@@ -118,7 +123,7 @@ const AvatarContextMenu = () => {
 
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Reset beim Öffnen
+  // Reset + Profil laden beim Öffnen
   useEffect(() => {
     if (isOpen) {
       setView('menu');
@@ -127,8 +132,12 @@ const AvatarContextMenu = () => {
       setAptTime(nextHourStr());
       setAptDuration(60);
       setAptSaving(false);
+      setTargetProfile(null);
+      if (targetUserId) {
+        loadProfile(targetUserId).then((res) => setTargetProfile(res?.profile ?? null)).catch(() => {});
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, targetUserId]);
 
   // ESC schließt das Menü
   useEffect(() => {
@@ -210,7 +219,28 @@ const AvatarContextMenu = () => {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div style={menuHeader}>Nutzer</div>
-        <div style={menuName}>{targetName}</div>
+        <div style={menuName}>
+          {targetProfile
+            ? [targetProfile.firstName, targetProfile.lastName].filter(Boolean).join(' ') || targetName
+            : targetName}
+        </div>
+        {targetProfile && (targetProfile.department || targetProfile.title) && (
+          <div style={{ padding: '0 14px 6px', color: '#64748b', fontSize: 12 }}>
+            {[targetProfile.department, targetProfile.title].filter(Boolean).join(' · ')}
+          </div>
+        )}
+        {targetProfile?.email && (
+          <div style={{ padding: '0 14px 8px' }}>
+            <a
+              href={`mailto:${targetProfile.email}`}
+              style={{ color: '#60a5fa', fontSize: 12, textDecoration: 'none' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.textDecoration = 'underline'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.textDecoration = 'none'; }}
+            >
+              {targetProfile.email}
+            </a>
+          </div>
+        )}
 
         {view === 'menu' ? (
           <>

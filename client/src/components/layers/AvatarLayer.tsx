@@ -75,23 +75,25 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
       {/* Remote-User (mit Tween-Animation) */}
       {Object.values(remoteUsers).map((user) => {
         const isBot = user.user_id.startsWith('bot_') || user.name.endsWith('_Bot');
-        const label = (!isBot && user.department) ? `${user.name} · ${user.department}` : user.name;
+        const hoverParts = !isBot ? [user.department, user.title].filter(Boolean) : [];
+        const hoverLabel = hoverParts.length > 0 ? hoverParts.join(' · ') : undefined;
         return (
           <SmileyAvatar
             key={user.user_id}
             x={user.x}
             y={user.y}
-            name={label}
+            name={user.name}
             isPlayer={false}
             isBot={isBot}
             animate={true}
             animateDuration={isBot ? 5 : 0.1}
+            hoverLabel={hoverLabel}
             onClick={user.user_id === 'bot_admin' ? openServiceStatus : undefined}
-          onContextMenu={
-            isBot
-              ? (user.user_id === 'bot_empfang' ? (sx, sy) => openReceptionMenu(sx, sy) : undefined)
-              : (sx, sy) => openCtxMenu(user.user_id, user.name, sx, sy)
-          }
+            onContextMenu={
+              isBot
+                ? (user.user_id === 'bot_empfang' ? (sx, sy) => openReceptionMenu(sx, sy) : undefined)
+                : (sx, sy) => openCtxMenu(user.user_id, user.name, sx, sy)
+            }
           />
         );
       })}

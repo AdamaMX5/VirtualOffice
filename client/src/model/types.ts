@@ -18,6 +18,7 @@ export interface RemoteUser {
   user_id: string;
   name: string;
   department?: string;
+  title?: string;
   x: number;
   y: number;
 }
@@ -26,7 +27,7 @@ export type RemoteUsersMap = Record<string, RemoteUser>;
 
 // ── WebSocket-Nachrichten (eingehend vom PresenceService) ─────────────────────
 export interface WsSnapshot  { type: 'snapshot';    users: RemoteUser[] }
-export interface WsJoined    { type: 'user_joined'; user_id: string; name: string; department?: string; x: number; y: number }
+export interface WsJoined    { type: 'user_joined'; user_id: string; name: string; department?: string; title?: string; x: number; y: number }
 export interface WsMoved     { type: 'user_moved';  user_id: string; x: number; y: number }
 export interface WsLeft       { type: 'user_left';    user_id: string }
 export interface WsNewMessage      { type: 'new_message';     senderId: string }
@@ -42,7 +43,7 @@ export interface WsRoomAdmitted     { type: 'room_admitted';      room: string }
 export type WsInbound = WsSnapshot | WsJoined | WsMoved | WsLeft | WsNewMessage | WsNotifyUser | WsChatMessage | WsProximityCall | WsProximityEnded | WsProximitySwitch | WsMeetingBg | WsRoomLockUpdate | WsRoomKnockRequest | WsRoomAdmitted;
 
 // ── WebSocket-Nachrichten (ausgehend zum PresenceService) ─────────────────────
-export interface WsMsgSetName        { type: 'set_name';        name: string; department?: string }
+export interface WsMsgSetName        { type: 'set_name';        name: string; department?: string; title?: string }
 export interface WsMsgMove           { type: 'move';            x: number; y: number }
 export interface WsMsgRefreshToken   { type: 'refresh_token';   token: string }
 export interface WsMsgNotifyUser     { type: 'notify_user';     targetUserId: string; callType?: 'call' | 'appointment' | 'guest_joined' }

@@ -50,6 +50,7 @@ interface UserInfo {
   user_id:     string;
   name:        string;
   department?: string;
+  title?:      string;
   x:           number;
   y:           number;
 }
@@ -83,6 +84,7 @@ async function saveUserState(u: UserInfo): Promise<void> {
     await redisPub.hset(userKey(u.user_id), {
       name:       u.name,
       department: u.department ?? '',
+      title:      u.title ?? '',
       x:          u.x,
       y:          u.y,
     });
@@ -153,6 +155,7 @@ async function getSnapshot(excludeId?: string): Promise<Array<{
           user_id:    userId,
           name:       d.name,
           department: d.department || undefined,
+          title:      d.title || undefined,
           x:          Number(d.x ?? 60),
           y:          Number(d.y ?? 45),
         });
@@ -164,7 +167,7 @@ async function getSnapshot(excludeId?: string): Promise<Array<{
       for (const u of connections.values()) {
         if (u.user_id === excludeId) continue;
         if (seenIds.has(u.user_id)) continue; // schon aus Redis vorhanden
-        result.push({ user_id: u.user_id, name: u.name, department: u.department, x: u.x, y: u.y });
+        result.push({ user_id: u.user_id, name: u.name, department: u.department, title: u.title, x: u.x, y: u.y });
       }
 
       return result;
@@ -176,7 +179,7 @@ async function getSnapshot(excludeId?: string): Promise<Array<{
   // Fallback: lokale Connections
   return [...connections.values()]
     .filter((u) => u.user_id !== excludeId)
-    .map(({ user_id, name, department, x, y }) => ({ user_id, name, department, x, y }));
+    .map(({ user_id, name, department, title, x, y }) => ({ user_id, name, department, title, x, y }));
 }
 
 /** Leitet ein Event lokal an den richtigen Empfänger weiter.
@@ -368,12 +371,13 @@ export function attachPresenceWs(server: Server): void {
           case 'set_name':
             u.name       = String(msg.name       ?? u.name);
             u.department = msg.department ? String(msg.department) : undefined;
-            console.log(`[Presence] set_name  userId=${u.user_id} name=${u.name} dept=${u.department ?? '-'}`);
+            u.title      = msg.title      ? String(msg.title)      : undefined;
+            console.log(`[Presence] set_name  userId=${u.user_id} name=${u.name} dept=${u.department ?? '-'} title=${u.title ?? '-'}`);
             await saveUserState(u);
             console.log(`[Presence] set_name  saveUserState OK userId=${u.user_id}`);
             await publishEvent({
               type: 'user_joined', user_id: u.user_id,
-              name: u.name, department: u.department, x: u.x, y: u.y,
+              name: u.name, department: u.department, title: u.title, x: u.x, y: u.y,
             });
             // Einladungsbenachrichtigung — einmalig beim ersten set_name des Gastes
             if (pendingInvite && u.user_id.startsWith('g_') && !guestNotified) {
