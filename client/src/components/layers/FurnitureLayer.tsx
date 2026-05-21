@@ -113,6 +113,7 @@ interface LayerProps {
 const FurnitureLayer: React.FC<LayerProps> = ({ x, y, scaleX, scaleY }) => {
   const { placedItems, furnitureModeActive, selectedId, selectItem } = useFurnitureStore();
   const openDesk = useDeskStore((s) => s.openDesk);
+  const jwt        = useAuthStore((s) => s.jwt);
   const authStatus = useAuthStore((s) => s.authStatus);
   const isAdmin    = useAuthStore((s) => {
     if (!s.jwt) return false;
@@ -158,7 +159,7 @@ const FurnitureLayer: React.FC<LayerProps> = ({ x, y, scaleX, scaleY }) => {
             isSelected={selectedId === item.id}
             canEdit={canEdit}
             onSelect={() => selectItem(item.id)}
-            onOpenDesk={() => openDesk(item.id, item.deskUserId ?? '', item.deskUserName ?? '')}
+            onOpenDesk={() => { if (jwt) openDesk(item.id, item.deskUserId ?? '', item.deskUserName ?? ''); }}
             trRef={trRef}
           />
         );
