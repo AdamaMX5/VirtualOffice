@@ -6,6 +6,7 @@
 import { useEffect } from 'react';
 import { usePlayerStore } from '../model/stores/playerStore';
 import { useAuthStore } from '../model/stores/authStore';
+import { useGuestWaitStore } from '../model/stores/guestWaitStore';
 
 const _inviteToken = typeof window !== 'undefined'
   ? new URLSearchParams(window.location.search).get('invite')
@@ -34,9 +35,13 @@ export function useInviteBoot(): void {
         return r.json() as Promise<InviteInfo>;
       })
       .then((info) => {
-        if (info.status === 'too_early') {
-          // Termin liegt noch in der Zukunft — Modal wieder öffnen mit Hinweis
-          useAuthStore.getState().openModal();
+        if (info.status === 'too_early' && info.appointmentTime) {
+          // Termin liegt noch in der Zukunft — Wartescreen zeigen (kein Login-Modal)
+          useGuestWaitStore.getState().setTooEarlyInfo({
+            guestName:       info.guestName,
+            inviterName:     info.inviterName,
+            appointmentTime: info.appointmentTime,
+          });
           return;
         }
         const name = info.guestName || 'Gast';

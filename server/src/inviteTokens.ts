@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 export interface InviteEntry {
   inviterId:        string;
@@ -21,7 +23,39 @@ export const ROOM_STARTS: Record<string, { x: number; y: number }> = {
 
 const EARLY_WINDOW_MS = 15 * 60 * 1000; // 15 Minuten Vorlaufzeit
 
-const tokens = new Map<string, InviteEntry>();
+// ── Datei-Persistenz ──────────────────────────────────────────────────────────
+
+const DATA_DIR    = path.join(__dirname, '..', 'data');
+const TOKENS_FILE = path.join(DATA_DIR, 'invite-tokens.json');
+
+function persist(map: Map<string, InviteEntry>): void {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(TOKENS_FILE, JSON.stringify(Object.fromEntries(map), null, 2), 'utf8');
+  } catch (e) {
+    console.warn('[Invite] Persistenz fehlgeschlagen:', e);
+  }
+}
+
+function loadFromDisk(): Map<string, InviteEntry> {
+  try {
+    const raw = fs.readFileSync(TOKENS_FILE, 'utf8');
+    const obj = JSON.parse(raw) as Record<string, InviteEntry>;
+    const now = Date.now();
+    const map = new Map<string, InviteEntry>();
+    for (const [token, entry] of Object.entries(obj)) {
+      if (now <= entry.expiresAt) map.set(token, entry); // abgelaufene Token verwerfen
+    }
+    if (map.size > 0) console.log(`[Invite] ${map.size} Token(s) aus Datei geladen`);
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+const tokens = loadFromDisk();
+
+// ── Public API ────────────────────────────────────────────────────────────────
 
 export function createInviteToken(
   inviterId: string,
@@ -39,6 +73,7 @@ export function createInviteToken(
     appointmentTime,
     expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24h
   });
+  persist(tokens);
   return token;
 }
 
@@ -46,7 +81,7 @@ export function createInviteToken(
 export function getInviteEntry(token: string): InviteEntry | null {
   const entry = tokens.get(token);
   if (!entry) return null;
-  if (Date.now() > entry.expiresAt) { tokens.delete(token); return null; }
+  if (Date.now() > entry.expiresAt) { tokens.delete(token); persist(tokens); return null; }
   return entry;
 }
 
@@ -55,7 +90,7 @@ export type InviteAccessStatus = 'valid' | 'too_early' | 'expired' | 'not_found'
 export function getInviteAccessStatus(token: string): InviteAccessStatus {
   const entry = tokens.get(token);
   if (!entry) return 'not_found';
-  if (Date.now() > entry.expiresAt) { tokens.delete(token); return 'expired'; }
+  if (Date.now() > entry.expiresAt) { tokens.delete(token); persist(tokens); return 'expired'; }
   if (entry.appointmentTime && Date.now() < entry.appointmentTime - EARLY_WINDOW_MS) return 'too_early';
   return 'valid';
 }
@@ -64,7 +99,8 @@ export function getInviteAccessStatus(token: string): InviteAccessStatus {
 export function resolveInviteToken(token: string): InviteEntry | null {
   const entry = tokens.get(token);
   if (!entry) return null;
-  if (Date.now() > entry.expiresAt) { tokens.delete(token); return null; }
+  if (Date.now() > entry.expiresAt) { tokens.delete(token); persist(tokens); return null; }
   tokens.delete(token); // single-use
+  persist(tokens);
   return entry;
 }
