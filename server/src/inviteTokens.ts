@@ -1,18 +1,18 @@
 /**
  * inviteTokens – Einladungs-Token im ObjectService speichern und abfragen.
  *
- * Der ObjectService ist die einzige Quelle der Wahrheit (kein lokaler Datei-Speicher).
+ * ObjectService ist die einzige Quelle der Wahrheit (kein lokaler Datei-Speicher).
  * Ein kurzer In-Memory-Cache (5 Minuten TTL) verhindert unnötige HTTP-Anfragen
  * beim wiederholten Lesen desselben Tokens (z.B. GET-Endpoint + WS-Connect).
  *
- * ObjectService-Collection: 'invitations'
+ * Collection: 'invitations'
  *   data:  { token, inviterId, inviterName, guestName, roomId, appointmentTime, expiresAt, createdAt }
  *   refs:  { token, inviterId }   ← ref[token]-Suche nutzt den Wildcard-Index
  *   isPublic: true                ← Token ist die Auth-Barriere (128-Bit-Zufallswert)
  */
 
 import crypto from 'crypto';
-import { config } from './config';
+import { listObjects, createObject } from './objectClient';
 
 export interface InviteEntry {
   inviterId:        string;
@@ -55,17 +55,6 @@ function cacheGet(token: string): InviteEntry | null {
 
 // ── ObjectService-Abfrage ─────────────────────────────────────────────────────
 
-type ObjDoc = { _id: string; data: Record<string, unknown> };
-
-function parseList(body: unknown): ObjDoc[] {
-  if (Array.isArray(body)) return body as ObjDoc[];
-  const b = body as Record<string, unknown>;
-  if (Array.isArray(b.objects)) return b.objects as ObjDoc[];
-  if (Array.isArray(b.items))   return b.items   as ObjDoc[];
-  if (Array.isArray(b.data))    return b.data    as ObjDoc[];
-  return [];
-}
-
 function docToEntry(d: Record<string, unknown>): InviteEntry {
   return {
     inviterId:       String(d.inviterId       ?? ''),
@@ -77,13 +66,10 @@ function docToEntry(d: Record<string, unknown>): InviteEntry {
   };
 }
 
-/** Sucht ein Token im ObjectService (isPublic=true, kein Auth nötig). */
+/** Sucht ein Token im ObjectService (isPublic=true, kein JWT nötig). */
 async function fetchFromStore(token: string): Promise<InviteEntry | null> {
   try {
-    const url = `${config.OBJECT_URL}/objects/${COLLECTION}?ref[token]=${encodeURIComponent(token)}&app=VirtualOffice`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const docs = parseList(await res.json());
+    const docs = await listObjects(COLLECTION, { 'ref[token]': token, app: 'VirtualOffice' });
     if (docs.length === 0) return null;
     const entry = docToEntry(docs[0].data);
     cache.set(token, { entry, cachedAt: Date.now() });
@@ -98,7 +84,7 @@ async function fetchFromStore(token: string): Promise<InviteEntry | null> {
 
 /**
  * Erstellt einen Einladungs-Token und speichert ihn im ObjectService.
- * jwt: Bearer-Token des einladenden Nutzers (für die POST-Anfrage).
+ * jwt: Bearer-Token des einladenden Nutzers.
  */
 export async function createInviteToken(
   inviterId:        string,
@@ -120,27 +106,17 @@ export async function createInviteToken(
     expiresAt,
     createdAt: Date.now(),
   };
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
 
-  const res = await fetch(`${config.OBJECT_URL}/objects/${COLLECTION}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      data,
-      refs:     { token, inviterId },
-      isPublic: true,
-      app:      'VirtualOffice',
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({})) as Record<string, unknown>;
-    throw new Error(String(err.error ?? err.detail ?? 'Einladung speichern fehlgeschlagen'));
-  }
-  const doc = await res.json() as { _id: string };
+  const doc = await createObject(
+    COLLECTION,
+    data,
+    { token, inviterId },
+    jwt,
+    'VirtualOffice',
+    true, // isPublic — Token-Wert ist die Auth-Barriere
+  );
   console.log(`[Invite] Token gespeichert (ObjectService) docId=${doc._id}`);
 
-  // Direkt in Cache schreiben — spart sofortigen Re-Fetch
   const entry: InviteEntry = { inviterId, inviterName, guestName, roomId, appointmentTime, expiresAt };
   cache.set(token, { entry, cachedAt: Date.now() });
   return token;
