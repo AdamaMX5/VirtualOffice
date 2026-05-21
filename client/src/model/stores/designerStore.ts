@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Room, Wall } from '../types';
 import { ROOMS as DEFAULT_ROOMS, WALLS as DEFAULT_WALLS } from '../mapData';
+import { useMapStore } from './mapStore';
 
 export type SnapMode     = 'meter' | 'decimeter' | 'centimeter';
 export type DesignerMode = 'draw' | 'door';
@@ -32,12 +33,15 @@ interface DesignerState {
   confirmRoom:          (label: string, fill: string) => void;
   discardPendingRoom:   () => void;
   deleteRoom:           (index: number) => void;
+  renameRoom:           (index: number, label: string, fill: string) => void;
   clearAll:             () => void;
   setSavedId:           (id: string) => void;
   setSpawnPoint:        (p: [number, number]) => void;
   movePoint:            (ox: number, oy: number, nx: number, ny: number) => void;
   addDoor:              (f: [number, number], t: [number, number]) => void;
   loadDefault:          () => void;
+  loadFromMap:          () => void;
+  importData:           (rooms: Room[], walls: Wall[], spawnPoint?: [number, number]) => void;
 }
 
 function coordsToWalls(coords: [number, number][]): Wall[] {
@@ -132,6 +136,13 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
     });
   },
 
+  renameRoom: (index, label, fill) =>
+    set((s) => ({
+      completedRooms: s.completedRooms.map((r, i) =>
+        i === index ? { ...r, label, fill } : r
+      ),
+    })),
+
   clearAll: () => set({ points: [], completedRooms: [], completedWalls: [], pendingRoom: null }),
 
   setSavedId: (id) => set({ savedId: id }),
@@ -167,6 +178,27 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
     points:         [],
     pendingRoom:    null,
   }),
+
+  loadFromMap: () => {
+    const { rooms, walls } = useMapStore.getState();
+    if (rooms.length > 0) {
+      set({
+        completedRooms: rooms.map((r) => ({ ...r, pts: [...r.pts] })),
+        completedWalls: walls.map((w) => ({ ...w })),
+        points:         [],
+        pendingRoom:    null,
+      });
+    }
+  },
+
+  importData: (rooms, walls, spawnPoint) =>
+    set((s) => ({
+      completedRooms: rooms.map((r) => ({ ...r, pts: [...r.pts] })),
+      completedWalls: walls.map((w) => ({ ...w })),
+      spawnPoint:     spawnPoint ?? s.spawnPoint,
+      points:         [],
+      pendingRoom:    null,
+    })),
 }));
 
 export function snapValue(v: number, mode: SnapMode): number {

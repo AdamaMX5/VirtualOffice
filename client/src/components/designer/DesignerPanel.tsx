@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useDesignerStore } from '../../model/stores/designerStore';
 import { useMapStore } from '../../model/stores/mapStore';
 import { createObject, putObject } from '../../services/objectClient';
@@ -19,6 +19,19 @@ function generateCode(rooms: Room[], walls: Wall[]): string {
   const wLines = walls.map(formatWall).join(',\n');
   return `export const ROOMS: Room[] = [\n${rLines}\n];\n\nexport const WALLS: Wall[] = [\n${wLines}\n];`;
 }
+
+// ── Preset-Farben (für Raum-Bearbeitung) ──────────────────────────────────────
+
+const PRESET_COLORS = [
+  { label: 'Grau',       value: '#585858' },
+  { label: 'Dunkelblau', value: '#1a2744' },
+  { label: 'Warmbraun',  value: '#3d2a1a' },
+  { label: 'Grün',       value: '#1a3d2a' },
+  { label: 'Violett',    value: '#2a1a3d' },
+  { label: 'Oliv',       value: '#3d3d1a' },
+  { label: 'Bordeaux',   value: '#3d1a1a' },
+  { label: 'Dunkel',     value: '#111827' },
+];
 
 // ── Stile ────────────────────────────────────────────────────────────────────
 
@@ -105,13 +118,23 @@ interface Props { onClose: () => void; }
 
 const DesignerPanel = ({ onClose }: Props) => {
   const {
-    snapMode, completedRooms, completedWalls, points,
-    deleteRoom, clearAll, savedId, setSavedId, loadDefault,
+    snapMode, completedRooms, completedWalls, points, spawnPoint,
+    deleteRoom, renameRoom, clearAll, savedId, setSavedId, loadDefault, loadFromMap, importData,
   } = useDesignerStore();
-  const [saving,      setSaving]      = useState(false);
-  const [saveMsg,     setSaveMsg]     = useState('');
-  const [showExport,  setShowExport]  = useState(false);
-  const [copied,      setCopied]      = useState(false);
+  const [saving,           setSaving]           = useState(false);
+  const [saveMsg,          setSaveMsg]          = useState('');
+  const [showExport,       setShowExport]       = useState(false);
+  const [copied,           setCopied]           = useState(false);
+  const [editingRoomIdx,   setEditingRoomIdx]   = useState<number | null>(null);
+  const [editLabel,        setEditLabel]        = useState('');
+  const [editFill,         setEditFill]         = useState('#585858');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load existing floor plan into designer on first open
+  useEffect(() => {
+    if (completedRooms.length === 0) loadFromMap();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const snapLabel = snapMode === 'meter' ? '1 m'
                   : snapMode === 'decimeter' ? '0,1 m'
@@ -148,6 +171,47 @@ const DesignerPanel = ({ onClose }: Props) => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch { /* ignore */ }
+  };
+
+  const handleDownloadJson = () => {
+    const data = JSON.stringify({ rooms: completedRooms, walls: completedWalls, spawnPoint }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'floor_plan.json'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target?.result as string) as {
+          rooms?: Room[]; walls?: Wall[]; spawnPoint?: [number, number];
+        };
+        if (Array.isArray(parsed.rooms) && Array.isArray(parsed.walls)) {
+          importData(parsed.rooms, parsed.walls, parsed.spawnPoint);
+        } else {
+          alert('Ungültiges Format: JSON muss { rooms, walls } enthalten.');
+        }
+      } catch { alert('Fehler beim Lesen der Datei.'); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const openEditRoom = (i: number) => {
+    setEditingRoomIdx(i);
+    setEditLabel(completedRooms[i].label);
+    setEditFill(completedRooms[i].fill);
+  };
+
+  const confirmEditRoom = () => {
+    if (editingRoomIdx === null || !editLabel.trim()) return;
+    renameRoom(editingRoomIdx, editLabel.trim(), editFill);
+    setEditingRoomIdx(null);
   };
 
   return (
@@ -192,7 +256,12 @@ const DesignerPanel = ({ onClose }: Props) => {
           </div>
         ) : (
           completedRooms.map((room, i) => (
-            <div key={i} style={roomRow}>
+            <div
+              key={i}
+              style={{ ...roomRow, cursor: 'pointer' }}
+              onClick={() => openEditRoom(i)}
+              title="Klicken zum Bearbeiten"
+            >
               <div style={{
                 width: 16, height: 16, flexShrink: 0,
                 background: room.fill, borderRadius: 3,
@@ -202,7 +271,11 @@ const DesignerPanel = ({ onClose }: Props) => {
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {room.label}
               </span>
-              <button style={delBtn} onClick={() => deleteRoom(i)} title="Raum löschen">✕</button>
+              <button
+                style={delBtn}
+                onClick={(e) => { e.stopPropagation(); deleteRoom(i); }}
+                title="Raum löschen"
+              >✕</button>
             </div>
           ))
         )}
@@ -217,6 +290,14 @@ const DesignerPanel = ({ onClose }: Props) => {
               onClick={() => setShowExport(true)}
             >
               📋 Als mapData.ts-Code exportieren
+            </button>
+            <button
+              style={{ ...actionBtn, color: '#a78bfa' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(167,139,250,0.08)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+              onClick={handleDownloadJson}
+            >
+              ⬇️ Als JSON herunterladen
             </button>
             <button
               style={{ ...actionBtn, color: saving ? '#475569' : '#34d399' }}
@@ -246,7 +327,92 @@ const DesignerPanel = ({ onClose }: Props) => {
             </button>
           </>
         )}
+        {/* Upload-Button immer sichtbar */}
+        <button
+          style={{ ...actionBtn, color: '#fbbf24' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(251,191,36,0.08)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          ⬆️ JSON-Datei importieren
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          style={{ display: 'none' }}
+          onChange={handleImportFile}
+        />
       </div>
+
+      {/* Raum-Bearbeitungs-Modal */}
+      {editingRoomIdx !== null && (
+        <div style={exportModal} onMouseDown={() => setEditingRoomIdx(null)}>
+          <div
+            style={{ ...exportCard, maxWidth: 400, gap: 10 }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 15 }}>Raum bearbeiten</div>
+
+            <div style={{ color: '#64748b', fontSize: 12, marginBottom: 2 }}>Raumname</div>
+            <input
+              autoFocus
+              value={editLabel}
+              onChange={(e) => setEditLabel(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmEditRoom(); if (e.key === 'Escape') setEditingRoomIdx(null); }}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: '#1e293b', border: '1px solid rgba(99,179,237,0.25)',
+                borderRadius: 6, padding: '8px 12px', color: '#e2e8f0', fontSize: 14,
+                outline: 'none', marginBottom: 10,
+              }}
+              placeholder="z. B. Büro A"
+            />
+
+            <div style={{ color: '#64748b', fontSize: 12, marginBottom: 6 }}>Bodenfarbe</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 10 }}>
+              {PRESET_COLORS.map((c) => (
+                <button
+                  key={c.value}
+                  title={c.label}
+                  onClick={() => setEditFill(c.value)}
+                  style={{
+                    width: '100%', aspectRatio: '1', background: c.value,
+                    border: editFill === c.value ? '2px solid #60a5fa' : '2px solid transparent',
+                    borderRadius: 6, cursor: 'pointer',
+                  }}
+                />
+              ))}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <input
+                type="color"
+                value={editFill}
+                onChange={(e) => setEditFill(e.target.value)}
+                style={{ width: 36, height: 28, border: 'none', borderRadius: 4, cursor: 'pointer', background: 'none' }}
+              />
+              <span style={{ color: '#64748b', fontSize: 12, fontFamily: 'monospace' }}>{editFill}</span>
+              <div style={{ width: 36, height: 24, background: editFill, borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                style={{ flex: 1, padding: '9px 0', background: 'transparent', border: '1px solid rgba(99,179,237,0.2)', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer' }}
+                onClick={() => setEditingRoomIdx(null)}
+              >
+                Abbrechen
+              </button>
+              <button
+                style={{ flex: 1, padding: '9px 0', background: '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: editLabel.trim() ? 1 : 0.4 }}
+                onClick={confirmEditRoom}
+                disabled={!editLabel.trim()}
+              >
+                Übernehmen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Export-Modal */}
       {showExport && (

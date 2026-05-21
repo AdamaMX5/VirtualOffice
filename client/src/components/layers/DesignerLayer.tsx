@@ -67,6 +67,7 @@ const DesignerLayer = React.memo(({ x, y, scaleX, scaleY }: Props) => {
 
     let rightDrag = false;
     let suppressNextClick = false;
+    let hasDraggedPoint   = false;
 
     const getSnap = (): [number, number] | null => {
       const pos = stage.getPointerPosition();
@@ -95,6 +96,7 @@ const DesignerLayer = React.memo(({ x, y, scaleX, scaleY }: Props) => {
           if (!eq(ox, nx) || !eq(oy, ny)) {
             store.movePoint(ox, oy, nx, ny);
             pointDragRef.current.current = [nx, ny];
+            hasDraggedPoint = true;
           }
         }
         return;
@@ -137,6 +139,7 @@ const DesignerLayer = React.memo(({ x, y, scaleX, scaleY }: Props) => {
         if (nearby) {
           pointDragRef.current = { current: nearby };
           suppressNextClick = true;
+          hasDraggedPoint   = false;
           return;
         }
       }
@@ -145,8 +148,10 @@ const DesignerLayer = React.memo(({ x, y, scaleX, scaleY }: Props) => {
     const onUp = (e: MouseEvent) => {
       if (e.button === 2) { rightDrag = false; return; }
       if (e.button !== 0) return;
-      spawnDragRef.current  = false;
-      pointDragRef.current  = null;
+      spawnDragRef.current = false;
+      // If user clicked an existing point without dragging → let onClick fire to start a new wall
+      if (pointDragRef.current && !hasDraggedPoint) suppressNextClick = false;
+      pointDragRef.current = null;
     };
 
     const onClick = (e: MouseEvent) => {
