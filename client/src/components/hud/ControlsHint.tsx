@@ -47,14 +47,14 @@ const ControlsHint = () => {
           onClick={toggle}
           style={{
             width: '100%',
-            background: isPixi ? 'rgba(168,85,247,0.25)' : 'rgba(255,255,255,0.06)',
-            border: `1px solid ${isPixi ? 'rgba(168,85,247,0.5)' : 'rgba(255,255,255,0.12)'}`,
+            background: isPixi ? 'rgba(168,85,247,0.35)' : 'rgba(99,179,237,0.18)',
+            border: `1px solid ${isPixi ? 'rgba(168,85,247,0.7)' : 'rgba(99,179,237,0.45)'}`,
             borderRadius: 6,
-            color: isPixi ? '#c4b5fd' : 'rgba(255,255,255,0.5)',
+            color: isPixi ? '#e9d5ff' : '#93c5fd',
             fontSize: 10,
-            fontWeight: 600,
+            fontWeight: 700,
             cursor: 'pointer',
-            padding: '4px 0',
+            padding: '5px 0',
             letterSpacing: '0.03em',
           }}
         >
