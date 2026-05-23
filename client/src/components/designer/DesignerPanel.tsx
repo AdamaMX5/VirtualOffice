@@ -131,11 +131,13 @@ const DesignerPanel = ({ onClose }: Props) => {
   const [editFill,         setEditFill]         = useState('#585858');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load existing floor plan into designer on first open
+  // Load existing floor plan into designer — wait until async map loader has finished
+  const mapLoaded = useMapStore((s) => s.loaded);
   useEffect(() => {
-    if (completedRooms.length === 0) loadFromMap();
+    if (!mapLoaded || completedRooms.length > 0) return;
+    loadFromMap();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mapLoaded]);
 
   const snapLabel = snapMode === 'meter' ? '1 m'
                   : snapMode === 'decimeter' ? '0,1 m'

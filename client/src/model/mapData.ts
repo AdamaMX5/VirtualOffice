@@ -195,6 +195,29 @@ export function toMapDocument(
     }
   });
 
+  // t-Parameter eines Punktes auf einem gerichteten Segment, null wenn nicht drauf
+  const ptOnSeg = (px: number, py: number, fx: number, fy: number, tx: number, ty: number): number | null => {
+    const dx = tx - fx, dy = ty - fy;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-10) return null;
+    const cross = (px - fx) * dy - (py - fy) * dx;
+    if (cross * cross > 1e-4 * len2) return null;
+    const t = ((px - fx) * dx + (py - fy) * dy) / len2;
+    return t >= -1e-6 && t <= 1 + 1e-6 ? t : null;
+  };
+
+  // Raum links von der Wand (wfx,wfy)→(wtx,wty): exakt oder als Teilsegment
+  const roomForDir = (wfx: number, wfy: number, wtx: number, wty: number): string | null => {
+    const exact = dirEdges.find(e => e.fx === wfx && e.fy === wfy && e.tx === wtx && e.ty === wty);
+    if (exact) return exact.roomId;
+    for (const e of dirEdges) {
+      const t1 = ptOnSeg(wfx, wfy, e.fx, e.fy, e.tx, e.ty);
+      const t2 = ptOnSeg(wtx, wty, e.fx, e.fy, e.tx, e.ty);
+      if (t1 !== null && t2 !== null && t2 > t1 + 1e-6) return e.roomId;
+    }
+    return null;
+  };
+
   // Wände bauen
   const mapWalls: MapWall[] = [];
   const seenWall = new Set<string>();
@@ -206,27 +229,18 @@ export function toMapDocument(
     if (seenWall.has(canonical)) return;
     seenWall.add(canonical);
 
-    const leftRoom  = dirEdges.find(e => e.fx === w.f[0] && e.fy === w.f[1] && e.tx === w.t[0] && e.ty === w.t[1])?.roomId ?? null;
-    const rightRoom = dirEdges.find(e => e.fx === w.t[0] && e.fy === w.t[1] && e.tx === w.f[0] && e.ty === w.f[1])?.roomId ?? null;
+    const leftRoom  = roomForDir(w.f[0], w.f[1], w.t[0], w.t[1]);
+    const rightRoom = roomForDir(w.t[0], w.t[1], w.f[0], w.f[1]);
 
     mapWalls.push({ id: `w${wn++}`, from: pid(w.f[0], w.f[1]), to: pid(w.t[0], w.t[1]), left: leftRoom, right: rightRoom, type: 'wall' });
   });
 
-  // Räume bauen
+  // Räume bauen — Wände aus leftRoom/rightRoom-Zuweisung
   const mapRooms = rooms.map((room, i) => {
     const rid = roomIds[i];
-    const wallIds: string[] = [];
-    const n = room.pts.length / 2;
-    for (let j = 0; j < n; j++) {
-      const fi = j * 2, ti = ((j + 1) % n) * 2;
-      const fx = room.pts[fi], fy = room.pts[fi+1], tx = room.pts[ti], ty = room.pts[ti+1];
-      const mw = mapWalls.find(w => {
-        const fp = pointsOut[w.from], tp = pointsOut[w.to];
-        return (fp.x === fx && fp.y === fy && tp.x === tx && tp.y === ty) ||
-               (fp.x === tx && fp.y === ty && tp.x === fx && tp.y === fy);
-      });
-      if (mw && !wallIds.includes(mw.id)) wallIds.push(mw.id);
-    }
+    const wallIds = mapWalls
+      .filter(w => w.left === rid || w.right === rid)
+      .map(w => w.id);
     return { id: rid, label: room.label, fill: room.fill, walls: wallIds };
   });
 
