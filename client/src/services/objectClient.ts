@@ -113,6 +113,48 @@ export async function deleteObject(collection: string, id: string): Promise<void
   await objFetch<unknown>(`/objects/${collection}/${id}`, { method: 'DELETE' }, jwt);
 }
 
+// ── Message-Favoriten (vo_message_favorites) ──────────────────────────────────
+
+export async function loadFavorites(
+  myId: string,
+): Promise<{ docId: string | null; favorites: string[] }> {
+  try {
+    const docs = await listObjects('vo_message_favorites', {
+      'ref[userId]': myId,
+      app: 'VirtualOffice',
+    });
+    if (!docs.length) return { docId: null, favorites: [] };
+    const favs = docs[0].data.favorites;
+    return {
+      docId: docs[0]._id,
+      favorites: Array.isArray(favs) ? (favs as string[]) : [],
+    };
+  } catch {
+    return { docId: null, favorites: [] };
+  }
+}
+
+export async function saveFavorites(
+  myId: string,
+  favorites: string[],
+  docId: string | null,
+): Promise<string | null> {
+  try {
+    const doc = docId
+      ? await putObject(
+          'vo_message_favorites', docId,
+          { favorites }, { userId: myId }, 'VirtualOffice', false,
+        )
+      : await createObject(
+          'vo_message_favorites',
+          { favorites }, { userId: myId }, 'VirtualOffice', false,
+        );
+    return doc._id;
+  } catch {
+    return docId;
+  }
+}
+
 // ── MediaService ──────────────────────────────────────────────────────────────
 
 export async function uploadMedia(

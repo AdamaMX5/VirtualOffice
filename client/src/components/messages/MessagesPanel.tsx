@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMessageStore, Message } from '../../model/stores/messageStore';
 import { usePresenceStore } from '../../model/stores/presenceStore';
-import { useAuthStore } from '../../model/stores/authStore';
-import { getJwtUserId } from '../../services/objectClient';
+import { getJwtUserId, loadFavorites, saveFavorites } from '../../services/objectClient';
 import { useMessaging } from '../../hooks/useMessaging';
 import { deleteMessage } from '../../services/messageClient';
+import { listAllProfiles, type ProfileEntry } from '../../services/profileClient';
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -45,6 +45,7 @@ interface ConvEntry {
   unread: number;
   lastBody: string;
   lastAt: string;
+  isFavorite: boolean;
 }
 
 function isMessageable(userId: string, name: string): boolean {
@@ -56,45 +57,67 @@ function isMessageable(userId: string, name: string): boolean {
 function buildConversations(
   inbox: Message[],
   onlineUsers: Record<string, { name: string }>,
+  allProfiles: ProfileEntry[],
+  favorites: string[],
   myId: string,
 ): ConvEntry[] {
-  const map = new Map<string, ConvEntry>();
+  const favSet = new Set(favorites);
+  const map    = new Map<string, ConvEntry>();
 
   for (const msg of inbox) {
-    const otherId = msg.senderId === myId ? msg.recipientId : msg.senderId;
-    const otherName = onlineUsers[otherId]?.name ?? otherId;
+    const otherId     = msg.senderId === myId ? msg.recipientId : msg.senderId;
+    const onlineName  = onlineUsers[otherId]?.name;
+    const profileName = allProfiles.find((p) => p.userId === otherId)?.displayName;
+    const otherName   = onlineName ?? profileName ?? otherId;
     if (!isMessageable(otherId, otherName)) continue;
     const existing = map.get(otherId);
-    const isNewer  = !existing || msg.createdAt > existing.lastAt;
     if (!existing) {
       map.set(otherId, {
-        userId:   otherId,
-        name:     otherName,
-        isOnline: !!onlineUsers[otherId],
+        userId: otherId, name: otherName, isOnline: !!onlineUsers[otherId],
         unread:   msg.recipientId === myId && !msg.readAt ? 1 : 0,
-        lastBody: msg.body,
-        lastAt:   msg.createdAt,
+        lastBody: msg.body, lastAt: msg.createdAt,
+        isFavorite: favSet.has(otherId),
       });
     } else {
-      if (isNewer) {
-        existing.lastBody = msg.body;
-        existing.lastAt   = msg.createdAt;
+      if (msg.createdAt > existing.lastAt) {
+        existing.lastBody = msg.body; existing.lastAt = msg.createdAt;
       }
       if (msg.recipientId === myId && !msg.readAt) existing.unread++;
     }
   }
 
-  // Online-User die noch keine Nachricht geschickt haben, hinzufügen
   for (const [uid, u] of Object.entries(onlineUsers)) {
     if (uid !== myId && !map.has(uid) && isMessageable(uid, u.name)) {
       map.set(uid, {
         userId: uid, name: u.name, isOnline: true,
-        unread: 0, lastBody: '', lastAt: '',
+        unread: 0, lastBody: '', lastAt: '', isFavorite: favSet.has(uid),
       });
     }
   }
 
-  return [...map.values()].sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+  for (const p of allProfiles) {
+    if (p.userId !== myId && !map.has(p.userId) && isMessageable(p.userId, p.displayName)) {
+      map.set(p.userId, {
+        userId: p.userId, name: p.displayName, isOnline: false,
+        unread: 0, lastBody: '', lastAt: '', isFavorite: favSet.has(p.userId),
+      });
+    }
+  }
+
+  return [...map.values()].sort((a, b) => {
+    if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
+    if (a.lastAt && b.lastAt) return b.lastAt.localeCompare(a.lastAt);
+    if (a.lastAt) return -1;
+    if (b.lastAt) return 1;
+    if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+    return a.name.localeCompare(b.name, 'de');
+  });
+}
+
+function convSection(c: ConvEntry): string {
+  if (c.isFavorite) return 'Favoriten';
+  if (c.lastAt)    return 'Letzte Gespräche';
+  return 'Alle Nutzer';
 }
 
 // ── Einzel-Nachricht ──────────────────────────────────────────────────────────
@@ -151,11 +174,11 @@ const ChatBubble: React.FC<{ msg: Message; isMine: boolean; onDelete: () => void
 const ChatView: React.FC<{ userId: string; name: string; isOnline: boolean }> = ({
   userId, name, isOnline,
 }) => {
-  const myId          = getJwtUserId();
+  const myId           = getJwtUserId();
   const activeMessages = useMessageStore((s) => s.activeMessages);
   const { sendMessage } = useMessaging();
-  const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
+  const [text, setText]         = useState('');
+  const [sending, setSending]   = useState(false);
   const [sendError, setSendError] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -190,7 +213,6 @@ const ChatView: React.FC<{ userId: string; name: string; isOnline: boolean }> = 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      {/* Chat-Header */}
       <div style={{
         padding: '10px 16px',
         borderBottom: '1px solid rgba(255,255,255,0.08)',
@@ -205,7 +227,6 @@ const ChatView: React.FC<{ userId: string; name: string; isOnline: boolean }> = 
         {!isOnline && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>offline</span>}
       </div>
 
-      {/* Nachrichten */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
         {activeMessages.length === 0 && (
           <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 12, marginTop: 40 }}>
@@ -223,38 +244,37 @@ const ChatView: React.FC<{ userId: string; name: string; isOnline: boolean }> = 
         <div ref={bottomRef} />
       </div>
 
-      {/* Eingabe */}
       <div style={{
         padding: '10px 12px',
         borderTop: '1px solid rgba(255,255,255,0.08)',
         display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0,
       }}>
-      {sendError && (
-        <div style={{ color: '#f87171', fontSize: 11, padding: '2px 4px' }}>{sendError}</div>
-      )}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <textarea
-          style={{ ...inputStyle, flex: 1, minHeight: 38, maxHeight: 120 }}
-          placeholder="Nachricht schreiben… (Enter = senden)"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          rows={1}
-        />
-        <button
-          onClick={handleSend}
-          disabled={!text.trim() || sending}
-          style={{
-            background: text.trim() ? 'rgba(79,142,247,0.85)' : 'rgba(255,255,255,0.1)',
-            border: 'none', borderRadius: 8,
-            color: '#fff', fontWeight: 700, fontSize: 16,
-            cursor: text.trim() ? 'pointer' : 'default',
-            padding: '0 14px', alignSelf: 'flex-end', height: 38,
-          }}
-        >
-          ➤
-        </button>
-      </div>
+        {sendError && (
+          <div style={{ color: '#f87171', fontSize: 11, padding: '2px 4px' }}>{sendError}</div>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <textarea
+            style={{ ...inputStyle, flex: 1, minHeight: 38, maxHeight: 120 }}
+            placeholder="Nachricht schreiben… (Enter = senden)"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={1}
+          />
+          <button
+            onClick={handleSend}
+            disabled={!text.trim() || sending}
+            style={{
+              background: text.trim() ? 'rgba(79,142,247,0.85)' : 'rgba(255,255,255,0.1)',
+              border: 'none', borderRadius: 8,
+              color: '#fff', fontWeight: 700, fontSize: 16,
+              cursor: text.trim() ? 'pointer' : 'default',
+              padding: '0 14px', alignSelf: 'flex-end', height: 38,
+            }}
+          >
+            ➤
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -271,20 +291,44 @@ const MessagesPanel: React.FC<Props> = ({ onClose }) => {
   const { loadInbox, openConversation } = useMessaging();
   const onlineUsers   = usePresenceStore((s) => s.remoteUsers);
 
-  useEffect(() => { loadInbox(); }, [loadInbox]);
+  const [allProfiles, setAllProfiles] = useState<ProfileEntry[]>([]);
+  const [favorites,   setFavorites]   = useState<string[]>([]);
+  const [favDocId,    setFavDocId]    = useState<string | null>(null);
 
-  // Wenn activeUserId extern gesetzt wird (z.B. von DeskModal), Konversation laden
+  useEffect(() => {
+    loadInbox();
+    if (!myId) return;
+    listAllProfiles().then(setAllProfiles).catch(() => {});
+    loadFavorites(myId).then(({ docId, favorites: favs }) => {
+      setFavDocId(docId);
+      setFavorites(favs);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (activeUserId) openConversation(activeUserId);
   }, [activeUserId, openConversation]);
 
-  const conversations = buildConversations(inboxMessages, onlineUsers, myId);
+  const toggleFavorite = useCallback(async (userId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newFavs = favorites.includes(userId)
+      ? favorites.filter((id) => id !== userId)
+      : [...favorites, userId];
+    setFavorites(newFavs);
+    const newDocId = await saveFavorites(myId, newFavs, favDocId);
+    if (newDocId && newDocId !== favDocId) setFavDocId(newDocId);
+  }, [favorites, favDocId, myId]);
+
+  const conversations = buildConversations(inboxMessages, onlineUsers, allProfiles, favorites, myId);
   const active = activeUserId
     ? conversations.find((c) => c.userId === activeUserId) ?? {
-        userId: activeUserId,
-        name: onlineUsers[activeUserId]?.name ?? activeUserId,
-        isOnline: !!onlineUsers[activeUserId],
-        unread: 0, lastBody: '', lastAt: '',
+        userId:     activeUserId,
+        name:       onlineUsers[activeUserId]?.name
+                    ?? allProfiles.find((p) => p.userId === activeUserId)?.displayName
+                    ?? activeUserId,
+        isOnline:   !!onlineUsers[activeUserId],
+        unread: 0, lastBody: '', lastAt: '', isFavorite: false,
       }
     : null;
 
@@ -317,53 +361,83 @@ const MessagesPanel: React.FC<Props> = ({ onClose }) => {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {conversations.length === 0 && (
             <div style={{ padding: 24, textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>
-              Keine Konversationen.<br />
-              <span style={{ fontSize: 11 }}>Online-Kollegen erscheinen automatisch.</span>
+              Keine Nutzer gefunden.
             </div>
           )}
-          {conversations.map((conv) => (
-            <div
-              key={conv.userId}
-              onClick={() => useMessageStore.getState().setActiveUserId(conv.userId)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '10px 16px', cursor: 'pointer',
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
-                background: 'transparent',
-                transition: 'background 0.12s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-            >
-              {/* Online-Indikator */}
-              <span style={{
-                width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
-                background: conv.isOnline ? '#86efac' : 'rgba(255,255,255,0.2)',
-              }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: conv.unread > 0 ? 700 : 400, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {conv.name}
-                </div>
-                {conv.lastBody && (
+          {conversations.map((conv, i) => {
+            const section     = convSection(conv);
+            const prevSection = i > 0 ? convSection(conversations[i - 1]) : null;
+            return (
+              <React.Fragment key={conv.userId}>
+                {section !== prevSection && (
                   <div style={{
-                    fontSize: 11, color: 'rgba(255,255,255,0.4)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    padding: '8px 16px 4px',
+                    fontSize: 10, fontWeight: 700,
+                    color: 'rgba(255,255,255,0.35)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
                   }}>
-                    {conv.lastBody}
+                    {section}
                   </div>
                 )}
-              </div>
-              {conv.unread > 0 && (
-                <span style={{
-                  background: '#4f8ef7', borderRadius: 10,
-                  padding: '1px 7px', fontSize: 11, fontWeight: 700,
-                  flexShrink: 0,
-                }}>
-                  {conv.unread}
-                </span>
-              )}
-            </div>
-          ))}
+                <div
+                  onClick={() => useMessageStore.getState().setActiveUserId(conv.userId)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 16px', cursor: 'pointer',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    background: 'transparent',
+                    transition: 'background 0.12s',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <span style={{
+                    width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
+                    background: conv.isOnline ? '#86efac' : 'rgba(255,255,255,0.2)',
+                  }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontWeight: conv.unread > 0 ? 700 : 400,
+                      fontSize: 13,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {conv.name}
+                    </div>
+                    {conv.lastBody && (
+                      <div style={{
+                        fontSize: 11, color: 'rgba(255,255,255,0.4)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {conv.lastBody}
+                      </div>
+                    )}
+                  </div>
+                  {conv.unread > 0 && (
+                    <span style={{
+                      background: '#4f8ef7', borderRadius: 10,
+                      padding: '1px 7px', fontSize: 11, fontWeight: 700,
+                      flexShrink: 0,
+                    }}>
+                      {conv.unread}
+                    </span>
+                  )}
+                  <button
+                    onClick={(e) => toggleFavorite(conv.userId, e)}
+                    title={conv.isFavorite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}
+                    style={{
+                      background: 'none', border: 'none',
+                      color: conv.isFavorite ? '#fbbf24' : 'rgba(255,255,255,0.2)',
+                      cursor: 'pointer', fontSize: 15, padding: '0 2px',
+                      flexShrink: 0, lineHeight: 1,
+                    }}
+                  >
+                    {conv.isFavorite ? '★' : '☆'}
+                  </button>
+                </div>
+              </React.Fragment>
+            );
+          })}
         </div>
       )}
 

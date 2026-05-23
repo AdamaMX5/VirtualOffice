@@ -49,6 +49,32 @@ export async function loadProfile(userId: string): Promise<{ id: string; profile
   }
 }
 
+export interface ProfileEntry {
+  userId: string;
+  displayName: string;
+}
+
+export async function listAllProfiles(): Promise<ProfileEntry[]> {
+  try {
+    const headers = await authHeaders();
+    const url = `${OBJECT_URL}/objects/${COLLECTION}?app=VirtualOffice&limit=200`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) return [];
+    const docs = parseDocList(await res.json());
+    return docs
+      .map((d) => {
+        const refs = (d as unknown as { refs?: Record<string, string> }).refs;
+        const userId = refs?.userId ?? '';
+        const { firstName, lastName, email } = d.data;
+        const displayName = [firstName, lastName].filter(Boolean).join(' ') || email || '';
+        return { userId, displayName };
+      })
+      .filter((e) => e.userId && e.displayName);
+  } catch {
+    return [];
+  }
+}
+
 export async function saveProfile(profile: UserProfile): Promise<void> {
   const userId = getJwtUserId();
   if (!userId) throw new Error('Nicht eingeloggt');
