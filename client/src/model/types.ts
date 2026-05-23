@@ -1,4 +1,4 @@
-// ── Map Data ──────────────────────────────────────────────────────────────────
+// ── Map Data (internes Render-Format) ─────────────────────────────────────────
 export interface Room {
   label: string;
   fill: string;
@@ -11,6 +11,32 @@ export interface Wall {
   f: [number, number]; // from [x, y] in Tile-Einheiten
   t: [number, number]; // to   [x, y] in Tile-Einheiten
   type: WallType;
+}
+
+// ── Map Document Format (Speicher-/Austauschformat) ────────────────────────────
+export interface MapPoint { x: number; y: number; }
+
+export interface MapWall {
+  id: string;
+  from: string;       // Punkt-ID
+  to: string;         // Punkt-ID
+  left: string | null;  // Raum-ID oder null
+  right: string | null; // Raum-ID oder null
+  type: 'wall';
+}
+
+export interface MapRoom {
+  id: string;
+  label: string;
+  fill: string;
+  walls: string[]; // Wand-IDs
+}
+
+export interface MapDocument {
+  points: Record<string, MapPoint>;
+  walls: MapWall[];
+  rooms: MapRoom[];
+  spawnPoint?: { x: number; y: number };
 }
 
 // ── Presence ──────────────────────────────────────────────────────────────────

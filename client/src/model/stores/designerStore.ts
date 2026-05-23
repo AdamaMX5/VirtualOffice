@@ -180,11 +180,12 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   }),
 
   loadFromMap: () => {
-    const { rooms, walls } = useMapStore.getState();
+    const { rooms, walls, spawnPoint } = useMapStore.getState();
     if (rooms.length > 0) {
       set({
         completedRooms: rooms.map((r) => ({ ...r, pts: [...r.pts] })),
         completedWalls: walls.map((w) => ({ ...w })),
+        spawnPoint,
         points:         [],
         pendingRoom:    null,
       });

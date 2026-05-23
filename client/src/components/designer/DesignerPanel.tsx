@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useDesignerStore } from '../../model/stores/designerStore';
 import { useMapStore } from '../../model/stores/mapStore';
 import { createObject, putObject } from '../../services/objectClient';
-import type { Room, Wall } from '../../model/types';
+import { parseMapDocument, toMapDocument } from '../../model/mapData';
+import type { Room, Wall, MapDocument } from '../../model/types';
 
 // ── Code-Export ───────────────────────────────────────────────────────────────
 
@@ -143,18 +144,14 @@ const DesignerPanel = ({ onClose }: Props) => {
   const handleSave = async () => {
     setSaving(true); setSaveMsg('');
     try {
-      const data = {
-        rooms: completedRooms as unknown as Record<string, unknown>[],
-        walls: completedWalls as unknown as Record<string, unknown>[],
-      };
+      const data = toMapDocument(completedRooms, completedWalls, spawnPoint) as unknown as Record<string, unknown>;
       if (savedId) {
         await putObject('floor_plans', savedId, data, {}, 'VirtualOffice', true);
       } else {
         const doc = await createObject('floor_plans', data, {}, 'VirtualOffice', true);
         setSavedId(doc._id);
       }
-      // Live-Update der gerenderten Map ohne Page-Reload
-      useMapStore.getState().setMap(completedRooms, completedWalls);
+      useMapStore.getState().setMap(completedRooms, completedWalls, spawnPoint);
       setSaveMsg('Gespeichert ✓');
     } catch {
       setSaveMsg('Fehler beim Speichern');
@@ -174,7 +171,7 @@ const DesignerPanel = ({ onClose }: Props) => {
   };
 
   const handleDownloadJson = () => {
-    const data = JSON.stringify({ rooms: completedRooms, walls: completedWalls, spawnPoint }, null, 2);
+    const data = JSON.stringify(toMapDocument(completedRooms, completedWalls, spawnPoint), null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -188,13 +185,20 @@ const DesignerPanel = ({ onClose }: Props) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const parsed = JSON.parse(ev.target?.result as string) as {
+        const parsed = JSON.parse(ev.target?.result as string) as MapDocument | {
           rooms?: Room[]; walls?: Wall[]; spawnPoint?: [number, number];
         };
-        if (Array.isArray(parsed.rooms) && Array.isArray(parsed.walls)) {
-          importData(parsed.rooms, parsed.walls, parsed.spawnPoint);
+        if ('points' in parsed && parsed.points && Array.isArray(parsed.walls) && Array.isArray(parsed.rooms)) {
+          // Neues Format
+          const { rooms, walls, spawnPoint: sp } = parseMapDocument(parsed as MapDocument);
+          importData(rooms, walls, sp);
+        } else if ('rooms' in parsed && Array.isArray(parsed.rooms) && Array.isArray(parsed.walls)) {
+          // Altes Format
+          const sp = 'spawnPoint' in parsed && Array.isArray(parsed.spawnPoint)
+            ? parsed.spawnPoint as [number, number] : undefined;
+          importData(parsed.rooms as Room[], parsed.walls as Wall[], sp);
         } else {
-          alert('Ungültiges Format: JSON muss { rooms, walls } enthalten.');
+          alert('Ungültiges Format.');
         }
       } catch { alert('Fehler beim Lesen der Datei.'); }
     };
