@@ -26,14 +26,19 @@ export function useInviteBoot(): void {
 
     listObjects('invitations', { 'ref[token]': _inviteToken, app: 'VirtualOffice' })
       .then((docs) => {
-        if (docs.length === 0) throw new Error('not_found');
-        const d = docs[0].data;
+        // Explizit nach Token filtern — falls ref-Filter mehr als ein Ergebnis liefert
+        const match = docs.find((d) => String(d.data.token ?? '') === _inviteToken);
+        if (!match) throw new Error('not_found');
+        const d = match.data;
         const expiresAt = Number(d.expiresAt ?? 0);
         if (Date.now() > expiresAt) throw new Error('expired');
 
         const appointmentTime = d.appointmentTime ? Number(d.appointmentTime) : null;
         const guestName       = String(d.guestName   ?? 'Gast');
         const inviterName     = String(d.inviterName  ?? '');
+
+        // Modal sicher schließen (Zustand v5: onRehydrateStorage läuft async nach useEffect)
+        useAuthStore.getState().closeModal();
 
         if (appointmentTime && Date.now() < appointmentTime - EARLY_WINDOW_MS) {
           useGuestWaitStore.getState().setTooEarlyInfo({

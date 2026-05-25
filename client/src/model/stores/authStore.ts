@@ -37,10 +37,13 @@ export const useAuthStore = create<AuthState>()(
       onRehydrateStorage: () => (rehydrated) => {
         console.log('[Auth] Hydration abgeschlossen — jwt vorhanden:', !!(rehydrated?.jwt), '| email:', rehydrated?.email);
         // Modal nur öffnen wenn nach Hydration kein JWT vorhanden.
-        // setState() aufrufen statt direkte Mutation, damit React-Subscriptions
-        // benachrichtigt werden und ein Re-Render stattfindet.
+        // Ausnahme: Einladungslink — useInviteBoot übernimmt den Flow.
         if (rehydrated && !rehydrated.jwt) {
-          rehydrated.openModal();
+          const hasInvite = typeof window !== 'undefined' &&
+            !!new URLSearchParams(window.location.search).get('invite');
+          if (!hasInvite) {
+            rehydrated.openModal();
+          }
         }
       },
     },
