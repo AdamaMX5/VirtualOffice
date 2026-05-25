@@ -30,9 +30,6 @@ export function useInviteBoot(): void {
         const match = docs.find((d) => String(d.data.token ?? '') === _inviteToken);
         if (!match) throw new Error('not_found');
         const d = match.data;
-        const expiresAt = Number(d.expiresAt ?? 0);
-        if (Date.now() > expiresAt) throw new Error('expired');
-
         const appointmentTime = d.appointmentTime ? Number(d.appointmentTime) : null;
         const guestName       = String(d.guestName   ?? 'Gast');
         const inviterName     = String(d.inviterName  ?? '');

@@ -126,7 +126,6 @@ export async function createInviteToken(
 export async function getInviteEntry(token: string): Promise<InviteEntry | null> {
   const entry = cacheGet(token) ?? await fetchFromStore(token);
   if (!entry) return null;
-  if (Date.now() > entry.expiresAt) return null;
   return entry;
 }
 
@@ -135,7 +134,6 @@ export type InviteAccessStatus = 'valid' | 'too_early' | 'expired' | 'not_found'
 export async function getInviteAccessStatus(token: string): Promise<InviteAccessStatus> {
   const entry = cacheGet(token) ?? await fetchFromStore(token);
   if (!entry) return 'not_found';
-  if (Date.now() > entry.expiresAt) return 'expired';
   if (entry.appointmentTime && Date.now() < entry.appointmentTime - EARLY_WINDOW_MS) return 'too_early';
   return 'valid';
 }
@@ -147,6 +145,5 @@ export async function getInviteAccessStatus(token: string): Promise<InviteAccess
 export async function resolveInviteToken(token: string): Promise<InviteEntry | null> {
   const entry = cacheGet(token) ?? await fetchFromStore(token);
   if (!entry) return null;
-  if (Date.now() > entry.expiresAt) return null;
   return entry;
 }
