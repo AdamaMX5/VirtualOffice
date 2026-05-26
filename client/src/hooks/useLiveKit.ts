@@ -88,10 +88,8 @@ export function useLiveKit() {
 
       room.on(RoomEvent.ParticipantConnected,    syncParticipants);
       room.on(RoomEvent.ParticipantDisconnected, syncParticipants);
-      room.on(RoomEvent.TrackSubscribed,         () => { syncParticipants(); S().bumpTrackVersion(); });
-      room.on(RoomEvent.TrackUnsubscribed,       () => { syncParticipants(); S().bumpTrackVersion(); });
-      room.on(RoomEvent.LocalTrackPublished,     () => S().bumpTrackVersion());
-      room.on(RoomEvent.LocalTrackUnpublished,   () => S().bumpTrackVersion());
+      room.on(RoomEvent.TrackSubscribed,         syncParticipants);
+      room.on(RoomEvent.TrackUnsubscribed,       syncParticipants);
 
       room.on(RoomEvent.Disconnected, () => {
         _room = null;

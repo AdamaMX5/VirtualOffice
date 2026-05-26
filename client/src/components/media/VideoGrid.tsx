@@ -16,15 +16,21 @@ interface TileProps {
 }
 
 const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [hasCam, setHasCam] = useState(
-    () => !!participant.getTrackPublication(Track.Source.Camera)?.track,
-  );
+  const videoRef       = useRef<HTMLVideoElement>(null);
+  const audioRef       = useRef<HTMLAudioElement>(null);
+  const placeholderRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const videoEl = videoRef.current;
-    const audioEl = audioRef.current;
+    const videoEl       = videoRef.current;
+    const audioEl       = audioRef.current;
+    const placeholderEl = placeholderRef.current;
+
+    // Sichtbarkeit direkt am DOM setzen — kein React-setState, kein Update-Loop
+    const updateVisibility = () => {
+      const hasCam = !!participant.getTrackPublication(Track.Source.Camera)?.track;
+      if (videoEl)       videoEl.style.display       = hasCam ? 'block' : 'none';
+      if (placeholderEl) placeholderEl.style.display  = hasCam ? 'none'  : 'flex';
+    };
 
     const detach = () => {
       const camPub = participant.getTrackPublication(Track.Source.Camera);
@@ -35,7 +41,6 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
         (micPub.track as { detach(el: HTMLAudioElement): void }).detach(audioEl);
     };
 
-    // Tracks an DOM-Elemente hängen — kein setState, sicher beim Mount
     const attach = () => {
       const camPub = participant.getTrackPublication(Track.Source.Camera);
       const micPub = participant.getTrackPublication(Track.Source.Microphone);
@@ -49,16 +54,12 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       if (micPub?.track && audioEl && !isLocal) {
         (micPub.track as { attach(el: HTMLAudioElement): void }).attach(audioEl);
       }
+      updateVisibility();
     };
 
-    // Nur von Event-Listenern aufgerufen (außerhalb des React-Render-Zyklus)
-    const reattach = () => {
-      detach();
-      attach();
-      setHasCam(!!participant.getTrackPublication(Track.Source.Camera)?.track);
-    };
+    const reattach = () => { detach(); attach(); };
 
-    attach(); // Kein setState auf Mount — verhindert React-#185-Schleife
+    attach();
 
     const events = [
       ParticipantEvent.TrackSubscribed, ParticipantEvent.TrackUnsubscribed,
@@ -89,22 +90,24 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       border: '1px solid rgba(255,255,255,0.1)',
       flexShrink: 0,
     }}>
+      {/* display wird per DOM direkt gesetzt (kein React-State) */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted={isLocal}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: hasCam ? 'block' : 'none' }}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'none' }}
       />
-      {!hasCam && (
-        <div style={{
+      <div
+        ref={placeholderRef}
+        style={{
           width: '100%', height: '100%',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 22, color: 'rgba(255,255,255,0.3)',
-        }}>
-          👤
-        </div>
-      )}
+        }}
+      >
+        👤
+      </div>
       <audio ref={audioRef} autoPlay muted={isLocal || !speakerEnabled} />
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,

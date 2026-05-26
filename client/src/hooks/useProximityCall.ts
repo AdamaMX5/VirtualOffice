@@ -123,14 +123,13 @@ async function joinProxRoom(
 
     if (!LK().isProxCall && LK().status !== 'connected') {
       const syncParts = () => LK().setParticipantIds([...room.remoteParticipants.keys()]);
-      const bumpTrack = () => LK().bumpTrackVersion();
       LK().setIsProxCall(true);
       LK().setStatus('connected');
       syncParts();
       room.on(RoomEvent.ParticipantConnected,    syncParts);
       room.on(RoomEvent.ParticipantDisconnected, syncParts);
-      room.on(RoomEvent.TrackSubscribed,         bumpTrack);
-      room.on(RoomEvent.TrackUnsubscribed,       bumpTrack);
+      room.on(RoomEvent.TrackSubscribed,         syncParts);
+      room.on(RoomEvent.TrackUnsubscribed,       syncParts);
     }
 
     room.on(RoomEvent.Disconnected, () => {
@@ -284,8 +283,8 @@ export function useProximityCall() {
         .catch((e) => console.warn('[ProxCall] Mic aktivieren fehlgeschlagen:', e));
       await _proxRoom.localParticipant.setCameraEnabled(true)
         .catch((e) => console.warn('[ProxCall] Kamera aktivieren fehlgeschlagen:', e));
-      // Track braucht einen Moment bis er streamt — Re-Attach erzwingen
-      setTimeout(() => LK().bumpTrackVersion(), 300);
+      // Track braucht einen Moment bis er streamt — Teilnehmer-Liste aktualisieren
+      setTimeout(() => LK().setParticipantIds([...(_proxRoom?.remoteParticipants.keys() ?? [])]), 300);
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
