@@ -131,7 +131,7 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
           <span style={{ color: '#fbbf24' }}>⏳ Meetingraum wird verbunden...</span>
         </div>
       )}
-      {false && /* buggy - disabled */ (
+      {meetingReady && (
         <button style={meetingBtnStyle} onClick={onOpenMeeting}>
           📺 Ansicht
         </button>

@@ -274,8 +274,36 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
     onClose();
   }, [isRecording, stopRecording, onClose]);
 
+  const liveKitStatus = useLiveKitStore((s) => s.status);
   const room = getRoom();
-  if (!room) return null;
+
+  if (!room || liveKitStatus !== 'connected') {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 400,
+        background: '#0a0a0f',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 16,
+      }}>
+        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 16 }}>
+          {liveKitStatus === 'connecting' ? '⏳ Verbinde mit Meetingraum…' : '⚠ Meetingraum nicht verbunden'}
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'rgba(15,15,19,0.85)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 8, color: '#fff',
+            cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            padding: '6px 14px', backdropFilter: 'blur(8px)',
+          }}
+        >
+          ✕ Schließen
+        </button>
+      </div>
+    );
+  }
 
   const remoteParticipants = participantIds
     .map((id) => room.remoteParticipants.get(id))
