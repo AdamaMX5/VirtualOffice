@@ -6,8 +6,8 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Participant, ParticipantEvent, Track } from 'livekit-client';
-import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { getRoom } from '../../hooks/useLiveKit';
+import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { videoRegistry, registerReloadAll } from '../../services/videoRegistry';
 
 // ── ParticipantMedia ──────────────────────────────────────────────────────────
@@ -52,7 +52,6 @@ const ParticipantMedia: React.FC<MediaProps> = ({ participant, isLocal, speakerE
       }
 
       videoRegistry.setActive(name, hasCam);
-      useLiveKitStore.getState().bumpTrackVersion();
     };
 
     reattach();
@@ -74,7 +73,6 @@ const ParticipantMedia: React.FC<MediaProps> = ({ participant, isLocal, speakerE
       if (camPub?.track && videoEl) (camPub.track as { detach(el: HTMLVideoElement): void }).detach(videoEl);
       if (micPub?.track && audioEl) (micPub.track as { detach(el: HTMLAudioElement): void }).detach(audioEl);
       videoRegistry.removeVideo(name);
-      useLiveKitStore.getState().bumpTrackVersion();
     };
   }, [participant, reloadKey]); // reloadKey erzwingt vollständiges Re-Attach
 

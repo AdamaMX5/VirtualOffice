@@ -13,16 +13,24 @@ interface TileProps {
   participant: Participant;
   isLocal: boolean;
   speakerEnabled: boolean;
-  reloadKey: number;
 }
 
-const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled, reloadKey }) => {
+const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
 
   useEffect(() => {
+    const detach = () => {
+      const camPub = participant.getTrackPublication(Track.Source.Camera);
+      const micPub = participant.getTrackPublication(Track.Source.Microphone);
+      if (camPub?.track && videoRef.current)
+        (camPub.track as { detach(el: HTMLVideoElement): void }).detach(videoRef.current);
+      if (micPub?.track && audioRef.current)
+        (micPub.track as { detach(el: HTMLAudioElement): void }).detach(audioRef.current);
+    };
     const reattach = () => {
+      detach();
       const camPub = participant.getTrackPublication(Track.Source.Camera);
       const micPub = participant.getTrackPublication(Track.Source.Microphone);
       if (camPub?.track && videoRef.current) {
@@ -37,14 +45,6 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       }
       forceUpdate();
     };
-    const detach = () => {
-      const camPub = participant.getTrackPublication(Track.Source.Camera);
-      const micPub = participant.getTrackPublication(Track.Source.Microphone);
-      if (camPub?.track && videoRef.current)
-        (camPub.track as { detach(el: HTMLVideoElement): void }).detach(videoRef.current);
-      if (micPub?.track && audioRef.current)
-        (micPub.track as { detach(el: HTMLAudioElement): void }).detach(audioRef.current);
-    };
 
     reattach();
     const events = [
@@ -57,7 +57,7 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       events.forEach((ev) => participant.off(ev as never, reattach as never));
       detach();
     };
-  }, [participant, reloadKey]);
+  }, [participant]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = isLocal || !speakerEnabled;
@@ -116,17 +116,6 @@ const VideoGrid: React.FC = () => {
   const speakerEnabled = useLiveKitStore((s) => s.speakerEnabled);
   const isProxCall     = useLiveKitStore((s) => s.isProxCall);
   const [collapsed, setCollapsed] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
-
-  // Reagiert auf Track-Änderungen via subscribe() statt useSyncExternalStore,
-  // damit keine synchronen Render-Interrupts im Concurrent Mode entstehen.
-  useEffect(() => {
-    return useLiveKitStore.subscribe((state, prev) => {
-      if (state.trackVersion !== prev.trackVersion) {
-        setReloadKey((k) => k + 1);
-      }
-    });
-  }, []);
 
   if (status !== 'connected') return null;
   const room = isProxCall ? getProxRoom() : getRoom();
@@ -152,9 +141,9 @@ const VideoGrid: React.FC = () => {
     }}>
       {!collapsed && (
         <>
-          <ParticipantTile participant={room.localParticipant} isLocal speakerEnabled={speakerEnabled} reloadKey={reloadKey} />
+          <ParticipantTile participant={room.localParticipant} isLocal speakerEnabled={speakerEnabled} />
           {remoteParticipants.map((p) => (
-            <ParticipantTile key={p.identity} participant={p} isLocal={false} speakerEnabled={speakerEnabled} reloadKey={reloadKey} />
+            <ParticipantTile key={p.identity} participant={p} isLocal={false} speakerEnabled={speakerEnabled} />
           ))}
         </>
       )}
