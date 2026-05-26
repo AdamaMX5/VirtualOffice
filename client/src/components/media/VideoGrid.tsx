@@ -13,9 +13,10 @@ interface TileProps {
   participant: Participant;
   isLocal: boolean;
   speakerEnabled: boolean;
+  reloadKey: number;
 }
 
-const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled }) => {
+const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled, reloadKey }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
@@ -56,7 +57,7 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       events.forEach((ev) => participant.off(ev as never, reattach as never));
       detach();
     };
-  }, [participant]);
+  }, [participant, reloadKey]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = isLocal || !speakerEnabled;
@@ -115,6 +116,17 @@ const VideoGrid: React.FC = () => {
   const speakerEnabled = useLiveKitStore((s) => s.speakerEnabled);
   const isProxCall     = useLiveKitStore((s) => s.isProxCall);
   const [collapsed, setCollapsed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Reagiert auf Track-Änderungen via subscribe() statt useSyncExternalStore,
+  // damit keine synchronen Render-Interrupts im Concurrent Mode entstehen.
+  useEffect(() => {
+    return useLiveKitStore.subscribe((state, prev) => {
+      if (state.trackVersion !== prev.trackVersion) {
+        setReloadKey((k) => k + 1);
+      }
+    });
+  }, []);
 
   if (status !== 'connected') return null;
   const room = isProxCall ? getProxRoom() : getRoom();
@@ -140,9 +152,9 @@ const VideoGrid: React.FC = () => {
     }}>
       {!collapsed && (
         <>
-          <ParticipantTile participant={room.localParticipant} isLocal speakerEnabled={speakerEnabled} />
+          <ParticipantTile participant={room.localParticipant} isLocal speakerEnabled={speakerEnabled} reloadKey={reloadKey} />
           {remoteParticipants.map((p) => (
-            <ParticipantTile key={p.identity} participant={p} isLocal={false} speakerEnabled={speakerEnabled} />
+            <ParticipantTile key={p.identity} participant={p} isLocal={false} speakerEnabled={speakerEnabled} reloadKey={reloadKey} />
           ))}
         </>
       )}
