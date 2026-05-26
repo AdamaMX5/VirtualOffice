@@ -17,8 +17,9 @@ import { useContextMenuStore } from './model/stores/contextMenuStore';
 import { useReceptionMenuStore } from './model/stores/receptionMenuStore';
 import { useInviteBoot } from './hooks/useInviteBoot';
 import { useProfileBoot } from './hooks/useProfileBoot';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
-const App = () => {
+const AppInner = () => {
   useInviteBoot();
   useProfileBoot();
 
@@ -45,5 +46,11 @@ const App = () => {
     </>
   );
 };
+
+const App = () => (
+  <ErrorBoundary>
+    <AppInner />
+  </ErrorBoundary>
+);
 
 export default App;
