@@ -48,7 +48,11 @@ export const useLiveKitStore = create<LiveKitState>((set) => ({
   setMicEnabled: (micEnabled) => set({ micEnabled }),
   setCamEnabled: (camEnabled) => set({ camEnabled }),
   setSpeakerEnabled: (speakerEnabled) => set({ speakerEnabled }),
-  setParticipantIds: (participantIds) => set({ participantIds }),
+  setParticipantIds: (ids) => set((s) => {
+    const prev = s.participantIds;
+    if (ids.length === prev.length && ids.every((id, i) => id === prev[i])) return s;
+    return { participantIds: ids };
+  }),
   bumpTrackVersion: () => set((s) => ({ trackVersion: s.trackVersion + 1 })),
   setError: (error, url = null, stack = null) => set({ error, errorUrl: url, errorStack: stack }),
   setIsProxCall: (isProxCall) => set({ isProxCall }),

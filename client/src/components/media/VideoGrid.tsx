@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useReducer, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Participant, RemoteParticipant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { getRoom } from '../../hooks/useLiveKit';
@@ -18,35 +18,48 @@ interface TileProps {
 const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
+  const [hasCam, setHasCam] = useState(
+    () => !!participant.getTrackPublication(Track.Source.Camera)?.track,
+  );
 
   useEffect(() => {
+    const videoEl = videoRef.current;
+    const audioEl = audioRef.current;
+
     const detach = () => {
       const camPub = participant.getTrackPublication(Track.Source.Camera);
       const micPub = participant.getTrackPublication(Track.Source.Microphone);
-      if (camPub?.track && videoRef.current)
-        (camPub.track as { detach(el: HTMLVideoElement): void }).detach(videoRef.current);
-      if (micPub?.track && audioRef.current)
-        (micPub.track as { detach(el: HTMLAudioElement): void }).detach(audioRef.current);
-    };
-    const reattach = () => {
-      detach();
-      const camPub = participant.getTrackPublication(Track.Source.Camera);
-      const micPub = participant.getTrackPublication(Track.Source.Microphone);
-      if (camPub?.track && videoRef.current) {
-        (camPub.track as { attach(el: HTMLVideoElement): void }).attach(videoRef.current);
-        const tryPlay = () => videoRef.current?.play().catch(() => {});
-        tryPlay();
-        videoRef.current.addEventListener('canplay', tryPlay, { once: true });
-        setTimeout(tryPlay, 300);
-      }
-      if (micPub?.track && audioRef.current && !isLocal) {
-        (micPub.track as { attach(el: HTMLAudioElement): void }).attach(audioRef.current);
-      }
-      forceUpdate();
+      if (camPub?.track && videoEl)
+        (camPub.track as { detach(el: HTMLVideoElement): void }).detach(videoEl);
+      if (micPub?.track && audioEl)
+        (micPub.track as { detach(el: HTMLAudioElement): void }).detach(audioEl);
     };
 
-    reattach();
+    // Tracks an DOM-Elemente hängen — kein setState, sicher beim Mount
+    const attach = () => {
+      const camPub = participant.getTrackPublication(Track.Source.Camera);
+      const micPub = participant.getTrackPublication(Track.Source.Microphone);
+      if (camPub?.track && videoEl) {
+        (camPub.track as { attach(el: HTMLVideoElement): void }).attach(videoEl);
+        const tryPlay = () => videoEl.play().catch(() => {});
+        tryPlay();
+        videoEl.addEventListener('canplay', tryPlay, { once: true });
+        setTimeout(tryPlay, 300);
+      }
+      if (micPub?.track && audioEl && !isLocal) {
+        (micPub.track as { attach(el: HTMLAudioElement): void }).attach(audioEl);
+      }
+    };
+
+    // Nur von Event-Listenern aufgerufen (außerhalb des React-Render-Zyklus)
+    const reattach = () => {
+      detach();
+      attach();
+      setHasCam(!!participant.getTrackPublication(Track.Source.Camera)?.track);
+    };
+
+    attach(); // Kein setState auf Mount — verhindert React-#185-Schleife
+
     const events = [
       ParticipantEvent.TrackSubscribed, ParticipantEvent.TrackUnsubscribed,
       ParticipantEvent.TrackMuted,      ParticipantEvent.TrackUnmuted,
@@ -57,13 +70,12 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       events.forEach((ev) => participant.off(ev as never, reattach as never));
       detach();
     };
-  }, [participant]);
+  }, [participant, isLocal]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = isLocal || !speakerEnabled;
   }, [speakerEnabled, isLocal]);
 
-  const hasCam      = !!participant.getTrackPublication(Track.Source.Camera)?.track;
   const displayName = participant.name || participant.identity || '?';
 
   return (

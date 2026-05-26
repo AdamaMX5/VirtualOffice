@@ -2,7 +2,7 @@
  * MeetingOverlay – Vollbild-Gitteransicht aller Teilnehmer.
  * Keine Namen, keine Gitterlinien, alle Kacheln gleichgroß.
  */
-import React, { useEffect, useRef, useReducer, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Participant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useParticipantVolumeStore } from '../../model/stores/participantVolumeStore';
@@ -106,7 +106,9 @@ interface TileProps {
 const MeetingTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
+  const [hasCam, setHasCam] = useState(
+    () => !!participant.getTrackPublication(Track.Source.Camera)?.track,
+  );
 
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -114,21 +116,39 @@ const MeetingTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled
 
   // Tracks an- und abhängen
   useEffect(() => {
-    const reattach = () => {
+    const videoEl = videoRef.current;
+    const audioEl = audioRef.current;
+
+    const detach = () => {
       const camPub = participant.getTrackPublication(Track.Source.Camera);
       const micPub = participant.getTrackPublication(Track.Source.Microphone);
-
-      if (camPub?.track && videoRef.current) {
-        (camPub.track as { attach(el: HTMLVideoElement): void }).attach(videoRef.current);
-        setTimeout(() => videoRef.current?.play().catch(() => {}), 50);
-      }
-      if (micPub?.track && audioRef.current && !isLocal) {
-        (micPub.track as { attach(el: HTMLAudioElement): void }).attach(audioRef.current);
-      }
-      forceUpdate();
+      if (camPub?.track && videoEl)
+        (camPub.track as { detach(el: HTMLVideoElement): void }).detach(videoEl);
+      if (micPub?.track && audioEl)
+        (micPub.track as { detach(el: HTMLAudioElement): void }).detach(audioEl);
     };
 
-    reattach();
+    // Kein setState — sicher beim Mount
+    const attach = () => {
+      const camPub = participant.getTrackPublication(Track.Source.Camera);
+      const micPub = participant.getTrackPublication(Track.Source.Microphone);
+      if (camPub?.track && videoEl) {
+        (camPub.track as { attach(el: HTMLVideoElement): void }).attach(videoEl);
+        setTimeout(() => videoEl.play().catch(() => {}), 50);
+      }
+      if (micPub?.track && audioEl && !isLocal) {
+        (micPub.track as { attach(el: HTMLAudioElement): void }).attach(audioEl);
+      }
+    };
+
+    // Nur von Event-Listenern aufgerufen (außerhalb des React-Render-Zyklus)
+    const reattach = () => {
+      detach();
+      attach();
+      setHasCam(!!participant.getTrackPublication(Track.Source.Camera)?.track);
+    };
+
+    attach(); // Kein setState auf Mount — verhindert React-#185-Schleife
 
     const events = [
       ParticipantEvent.TrackSubscribed,
@@ -141,8 +161,9 @@ const MeetingTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled
     events.forEach((ev) => participant.on(ev as never, reattach as never));
     return () => {
       events.forEach((ev) => participant.off(ev as never, reattach as never));
+      detach();
     };
-  }, [participant]);
+  }, [participant, isLocal]);
 
   // Lautstärke des Audio-Elements reaktiv halten
   useEffect(() => {
@@ -154,8 +175,6 @@ const MeetingTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = isLocal || !speakerEnabled;
   }, [speakerEnabled, isLocal]);
-
-  const hasCam = !!participant.getTrackPublication(Track.Source.Camera)?.track;
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     if (isLocal) return; // eigene Lautstärke macht keinen Sinn
