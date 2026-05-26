@@ -13,10 +13,9 @@ interface TileProps {
   participant: Participant;
   isLocal: boolean;
   speakerEnabled: boolean;
-  reloadKey: number;
 }
 
-const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled, reloadKey }) => {
+const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
@@ -57,7 +56,7 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       events.forEach((ev) => participant.off(ev as never, reattach as never));
       detach();
     };
-  }, [participant, reloadKey]);
+  }, [participant]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = isLocal || !speakerEnabled;
@@ -114,7 +113,6 @@ const VideoGrid: React.FC = () => {
   const status         = useLiveKitStore((s) => s.status);
   const participantIds = useLiveKitStore((s) => s.participantIds);
   const speakerEnabled = useLiveKitStore((s) => s.speakerEnabled);
-  const trackVersion   = useLiveKitStore((s) => s.trackVersion);
   const isProxCall     = useLiveKitStore((s) => s.isProxCall);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -142,9 +140,9 @@ const VideoGrid: React.FC = () => {
     }}>
       {!collapsed && (
         <>
-          <ParticipantTile participant={room.localParticipant} isLocal speakerEnabled={speakerEnabled} reloadKey={trackVersion} />
+          <ParticipantTile participant={room.localParticipant} isLocal speakerEnabled={speakerEnabled} />
           {remoteParticipants.map((p) => (
-            <ParticipantTile key={p.identity} participant={p} isLocal={false} speakerEnabled={speakerEnabled} reloadKey={trackVersion} />
+            <ParticipantTile key={p.identity} participant={p} isLocal={false} speakerEnabled={speakerEnabled} />
           ))}
         </>
       )}

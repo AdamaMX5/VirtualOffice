@@ -3,7 +3,6 @@ import { Layer } from 'react-konva';
 import type KonvaType from 'konva';
 import { usePlayerStore } from '../../model/stores/playerStore';
 import { usePresenceStore } from '../../model/stores/presenceStore';
-import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useCameraStore } from '../../model/stores/cameraStore';
 import { useServiceStatusStore } from '../../model/stores/serviceStatusStore';
 import { useProfileStore } from '../../model/stores/profileStore';
@@ -36,8 +35,6 @@ const AvatarLayer = React.memo(({ x, y, scaleX, scaleY, updateFromDrag, paused }
     img.onerror = () => setOwnImgEl(null);
     img.src = avatarUrl;
   }, [avatarUrl]);
-  // trackVersion als Re-Render-Trigger wenn Video-Tracks sich ändern
-  useLiveKitStore((s) => s.trackVersion);
 
   // Konva-Pixel → Tile-Koordinaten → updateFromDrag
   const handleDragMove = useCallback((e: KonvaType.KonvaEventObject<DragEvent>) => {
