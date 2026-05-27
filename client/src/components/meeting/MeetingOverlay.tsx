@@ -2,7 +2,7 @@
  * MeetingOverlay – Vollbild-Gitteransicht aller Teilnehmer.
  * Keine Namen, keine Gitterlinien, alle Kacheln gleichgroß.
  */
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Participant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useParticipantVolumeStore } from '../../model/stores/participantVolumeStore';
@@ -257,8 +257,12 @@ const MeetingOverlay: React.FC<OverlayProps> = ({ onClose }) => {
   const bgUrl           = useMeetingStore((s) => s.bgUrl);
   const { isRecording, startRecording, stopRecording, tabHidden } = useRecording();
 
-  const lockedRooms = useRoomLockStore((s) => s.lockedRooms);
-  const knockers    = useRoomLockStore((s) => s.knockers.filter((k) => k.room === 'Meetingraum'));
+  const lockedRooms   = useRoomLockStore((s) => s.lockedRooms);
+  const allKnockers   = useRoomLockStore((s) => s.knockers);
+  const knockers      = useMemo(
+    () => allKnockers.filter((k) => k.room === 'Meetingraum'),
+    [allKnockers],
+  );
   const myId        = useAuthStore.getState().userId;
   const isLocked    = 'Meetingraum' in lockedRooms;
   const lockOwner   = lockedRooms['Meetingraum'];

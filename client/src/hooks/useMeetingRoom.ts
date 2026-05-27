@@ -30,6 +30,8 @@ export function useMeetingRoom() {
   };
 
   // Haupt-Effekt: Betreten / Verlassen des Meetingraums
+  // KEIN `admitted` in den Deps — setAdmitted() darf nicht hier aufgerufen werden,
+  // sonst entsteht der React-#185-Loop (Dep ändert sich im eigenen Effect).
   useEffect(() => {
     const prev = prevRoomRef.current;
     prevRoomRef.current = currentRoom;
@@ -38,9 +40,6 @@ export function useMeetingRoom() {
       const lockStore = useRoomLockStore.getState();
       if (lockStore.isLocked('Meetingraum') && !lockStore.admitted) {
         return; // locked — player must knock
-      }
-      if (lockStore.admitted) {
-        lockStore.setAdmitted(false);
       }
 
       const { status, roomName } = useLiveKitStore.getState();
@@ -58,7 +57,21 @@ export function useMeetingRoom() {
         disconnect();
       }
     }
-  }, [currentRoom, admitted, connect, switchRoom, disconnect]);
+  }, [currentRoom, connect, switchRoom, disconnect]);
+
+  // Einlass-Effekt: feuert wenn der Spieler vom Raumbesitzer eingelassen wird.
+  // Löscht das admitted-Flag und verbindet dann — getrennt vom Haupt-Effekt,
+  // damit setAdmitted(false) NICHT in einem Effect liegt, der admitted als Dep hat.
+  useEffect(() => {
+    if (!admitted || currentRoom !== 'Meetingraum') return;
+    useRoomLockStore.getState().setAdmitted(false); // Flag konsumieren
+    const { status, roomName } = useLiveKitStore.getState();
+    if (status === 'idle') {
+      connect('meeting');
+    } else if (status === 'connected' && roomName !== 'meeting') {
+      switchRoom('meeting');
+    }
+  }, [admitted, currentRoom, connect, switchRoom]);
 
   // Retry-Effekt: bei Fehler nach 5s erneut verbinden
   useEffect(() => {
