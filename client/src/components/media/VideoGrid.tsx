@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Participant, RemoteParticipant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { getRoom } from '../../hooks/useLiveKit';
@@ -16,21 +16,15 @@ interface TileProps {
 }
 
 const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled }) => {
-  const videoRef       = useRef<HTMLVideoElement>(null);
-  const audioRef       = useRef<HTMLAudioElement>(null);
-  const placeholderRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [hasCam, setHasCam] = useState(
+    () => !!participant.getTrackPublication(Track.Source.Camera)?.track,
+  );
 
   useEffect(() => {
-    const videoEl       = videoRef.current;
-    const audioEl       = audioRef.current;
-    const placeholderEl = placeholderRef.current;
-
-    // Sichtbarkeit direkt am DOM setzen — kein React-setState, kein Update-Loop
-    const updateVisibility = () => {
-      const hasCam = !!participant.getTrackPublication(Track.Source.Camera)?.track;
-      if (videoEl)       videoEl.style.display       = hasCam ? 'block' : 'none';
-      if (placeholderEl) placeholderEl.style.display  = hasCam ? 'none'  : 'flex';
-    };
+    const videoEl = videoRef.current;
+    const audioEl = audioRef.current;
 
     const detach = () => {
       const camPub = participant.getTrackPublication(Track.Source.Camera);
@@ -54,10 +48,13 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       if (micPub?.track && audioEl && !isLocal) {
         (micPub.track as { attach(el: HTMLAudioElement): void }).attach(audioEl);
       }
-      updateVisibility();
     };
 
-    const reattach = () => { detach(); attach(); };
+    const reattach = () => {
+      detach();
+      attach();
+      setHasCam(!!participant.getTrackPublication(Track.Source.Camera)?.track);
+    };
 
     attach();
 
@@ -90,24 +87,22 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       border: '1px solid rgba(255,255,255,0.1)',
       flexShrink: 0,
     }}>
-      {/* display wird per DOM direkt gesetzt (kein React-State) */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted={isLocal}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'none' }}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: hasCam ? 'block' : 'none' }}
       />
-      <div
-        ref={placeholderRef}
-        style={{
+      {!hasCam && (
+        <div style={{
           width: '100%', height: '100%',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 22, color: 'rgba(255,255,255,0.3)',
-        }}
-      >
-        👤
-      </div>
+        }}>
+          👤
+        </div>
+      )}
       <audio ref={audioRef} autoPlay muted={isLocal || !speakerEnabled} />
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
