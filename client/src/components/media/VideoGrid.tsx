@@ -48,13 +48,10 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       if (micPub?.track && audioEl && !isLocal) {
         (micPub.track as { attach(el: HTMLAudioElement): void }).attach(audioEl);
       }
+      setHasCam(!!camPub?.track);
     };
 
-    const reattach = () => {
-      detach();
-      attach();
-      setHasCam(!!participant.getTrackPublication(Track.Source.Camera)?.track);
-    };
+    const reattach = () => { detach(); attach(); };
 
     attach();
 
