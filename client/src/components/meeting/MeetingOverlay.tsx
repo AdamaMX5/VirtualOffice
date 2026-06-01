@@ -2,7 +2,7 @@
  * MeetingOverlay – Vollbild-Gitteransicht aller Teilnehmer.
  * Keine Namen, keine Gitterlinien, alle Kacheln gleichgroß.
  */
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo, useReducer } from 'react';
 import { Participant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useParticipantVolumeStore } from '../../model/stores/participantVolumeStore';
@@ -106,9 +106,10 @@ interface TileProps {
 const MeetingTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [hasCam, setHasCam] = useState(
-    () => !!participant.getTrackPublication(Track.Source.Camera)?.track,
-  );
+  const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
+
+  // Direkt beim Render aus dem Participant lesen — nie veraltet, auch nach Parent-Rerender
+  const hasCam = !!participant.getTrackPublication(Track.Source.Camera)?.track;
 
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -138,10 +139,9 @@ const MeetingTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled
       if (micPub?.track && audioEl && !isLocal) {
         (micPub.track as { attach(el: HTMLAudioElement): void }).attach(audioEl);
       }
-      setHasCam(!!camPub?.track);
     };
 
-    const reattach = () => { detach(); attach(); };
+    const reattach = () => { detach(); attach(); forceUpdate(); };
 
     attach();
 

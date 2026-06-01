@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useReducer } from 'react';
 import { Participant, RemoteParticipant, ParticipantEvent, Track } from 'livekit-client';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { getRoom } from '../../hooks/useLiveKit';
@@ -18,9 +18,10 @@ interface TileProps {
 const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEnabled }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [hasCam, setHasCam] = useState(
-    () => !!participant.getTrackPublication(Track.Source.Camera)?.track,
-  );
+  const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
+
+  // Direkt beim Render aus dem Participant lesen — nie veraltet, auch nach Parent-Rerender
+  const hasCam = !!participant.getTrackPublication(Track.Source.Camera)?.track;
 
   useEffect(() => {
     const videoEl = videoRef.current;
@@ -48,10 +49,9 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
       if (micPub?.track && audioEl && !isLocal) {
         (micPub.track as { attach(el: HTMLAudioElement): void }).attach(audioEl);
       }
-      setHasCam(!!camPub?.track);
     };
 
-    const reattach = () => { detach(); attach(); };
+    const reattach = () => { detach(); attach(); forceUpdate(); };
 
     attach();
 
