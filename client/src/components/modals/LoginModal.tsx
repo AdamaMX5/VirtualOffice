@@ -188,6 +188,13 @@ const LoginModal = () => {
             <button style={btnPrimary} onClick={handleCheckEmail} disabled={loading}>
               {loading ? '⏳ ...' : 'Weiter'}
             </button>
+            <button style={linkBtn} onClick={() => {
+              if (!email.trim()) { setError('Bitte zuerst E-Mail eingeben.'); return; }
+              setError(''); setStep('register');
+              setTimeout(() => passwordRef.current?.focus(), 50);
+            }}>
+              Neues Konto registrieren
+            </button>
           </>
         )}
 
