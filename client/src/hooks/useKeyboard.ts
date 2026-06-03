@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * Gibt eine stabile Ref zurück, die eine Set<string> mit allen aktuell
- * gedrückten KeyCodes enthält. Kann sicher in rAF-Closures gelesen werden.
+ * Returns a stable ref holding a Set<string> of all currently pressed key codes.
+ * Safe to read inside rAF closures.
  */
 export function useKeyboard(): React.RefObject<Set<string>> {
   const keys = useRef<Set<string>>(new Set());

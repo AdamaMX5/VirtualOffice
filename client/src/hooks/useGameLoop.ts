@@ -7,7 +7,7 @@ import { MAP, WALK, SPRINT, SEND_INTERVAL, P } from '../model/constants';
 import { getRoomAtPos } from '../model/stores/mapStore';
 import { useKeyboard } from './useKeyboard';
 
-// Modul-Level Follow-Target (wie presenceSend — von außen setzbar)
+// Module-level follow target (like presenceSend — settable from outside)
 let _followUserId: string | null = null;
 
 export function setFollowTarget(userId: string | null, name?: string) {
@@ -17,11 +17,11 @@ export function setFollowTarget(userId: string | null, name?: string) {
 }
 
 interface GameLoopOptions {
-  /** Callback zum Senden der aktuellen Position per WebSocket */
+  /** Callback to send the current position via WebSocket */
   sendMove: (x: number, y: number) => void;
   stageWidth: number;
   stageHeight: number;
-  /** Wenn true, werden WASD und Pfeiltasten ignoriert (z.B. während Meeting-Ansicht) */
+  /** When true, WASD and arrow keys are ignored (e.g. while the meeting view is open) */
   paused?: boolean;
 }
 
@@ -33,7 +33,7 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
   const setCurrentRoom = usePlayerStore((s) => s.setCurrentRoom);
   const { setOffset, setFollow } = useCameraStore();
 
-  // Stabile Refs für rAF-Closure (kein Stale-Closure-Problem)
+  // Stable refs for rAF closure (no stale-closure issue)
   const posRef      = useRef({ wx: 60.0, wy: 45.0 });
   const roomRef     = useRef<string | null>(null);
   const scaleRef    = useRef(1.5);
@@ -47,7 +47,7 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
   stageW.current = stageWidth;
   stageH.current = stageHeight;
 
-  // F-Taste: Follow-Toggle
+  // F key: toggle camera follow
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'KeyF') {
@@ -68,7 +68,7 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [setFollow, setOffset]);
 
-  // Kamera beim ersten Mount auf Spieler-Startposition zentrieren
+  // Center camera on player's start position on first mount
   useEffect(() => {
     const offset = {
       x: stageW.current / 2 - posRef.current.wx * P * scaleRef.current,
@@ -79,7 +79,7 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync scale/offset/follow automatisch aus dem Store (verhindert Stale-Closure beim Zoom)
+  // Sync scale/offset/follow from the store automatically (prevents stale closure on zoom)
   useEffect(() => {
     return useCameraStore.subscribe((state) => {
       scaleRef.current  = state.scale;
@@ -103,12 +103,12 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
       const spd = (sprint ? SPRINT : WALK) * dt;
 
       let dx = 0, dy = 0;
-      if (k.has('KeyW')) dy -= 1;
-      if (k.has('KeyS')) dy += 1;
-      if (k.has('KeyA')) dx -= 1;
-      if (k.has('KeyD')) dx += 1;
+      if (k.has('KeyW') || k.has('ArrowUp'))    dy -= 1;
+      if (k.has('KeyS') || k.has('ArrowDown'))  dy += 1;
+      if (k.has('KeyA') || k.has('ArrowLeft'))  dx -= 1;
+      if (k.has('KeyD') || k.has('ArrowRight')) dx += 1;
 
-      // Tastensteuerung bricht Follow ab
+      // Any movement key breaks follow mode
       if ((dx !== 0 || dy !== 0) && _followUserId) {
         _followUserId = null;
         useFollowStore.getState().stopFollowing();
@@ -121,7 +121,7 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
         posRef.current = { wx: newWx, wy: newWy };
         setPosition(newWx, newWy);
 
-        // Raum-Erkennung: nur bei Wechsel in den Store schreiben
+        // Room detection: only write to store on room change
         const newRoom = getRoomAtPos(newWx, newWy);
         if (newRoom !== roomRef.current) {
           roomRef.current = newRoom;
@@ -137,7 +137,7 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
           setOffset(newOffset);
         }
 
-        // Throttled WS-Send
+        // Throttled WebSocket send
         const now2 = performance.now();
         const ddx = Math.abs(newWx - lastSentRef.current.x);
         const ddy = Math.abs(newWy - lastSentRef.current.y);
@@ -147,13 +147,13 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
           lastSendRef.current = now2;
         }
       } else if (_followUserId) {
-        // ── Follow-Modus ──────────────────────────────────────────
+        // ── Follow mode ───────────────────────────────────────────
         const target = usePresenceStore.getState().remoteUsers[_followUserId];
         if (!target) {
           _followUserId = null;
           useFollowStore.getState().stopFollowing();
         } else {
-          const FOLLOW_DIST = 2.5; // Abstand in Tiles
+          const FOLLOW_DIST = 2.5; // distance in tiles
           const tdx = target.x - posRef.current.wx;
           const tdy = target.y - posRef.current.wy;
           const dist = Math.sqrt(tdx * tdx + tdy * tdy);
@@ -168,7 +168,7 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
             const newRoom = getRoomAtPos(newWx, newWy);
             if (newRoom !== roomRef.current) { roomRef.current = newRoom; setCurrentRoom(newRoom); }
 
-            // Kamera immer auf eigenen Avatar fokussieren während Follow
+            // Always keep the camera focused on own avatar while following
             const newOffset = {
               x: stageW.current / 2 - newWx * 32 * scaleRef.current,
               y: stageH.current / 2 - newWy * 32 * scaleRef.current,
@@ -188,12 +188,12 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
         }
       }
 
-      // Kamera-Pfeiltasten
+      // Numpad camera pan: 8=up, 2=down, 4=left, 6=right (works with and without Num Lock)
       const CAM = 5;
-      if (k.has('ArrowUp'))    { followRef.current = false; setFollow(false); offsetRef.current = { ...offsetRef.current, y: offsetRef.current.y + CAM }; setOffset({ ...offsetRef.current }); }
-      if (k.has('ArrowDown'))  { followRef.current = false; setFollow(false); offsetRef.current = { ...offsetRef.current, y: offsetRef.current.y - CAM }; setOffset({ ...offsetRef.current }); }
-      if (k.has('ArrowLeft'))  { followRef.current = false; setFollow(false); offsetRef.current = { ...offsetRef.current, x: offsetRef.current.x + CAM }; setOffset({ ...offsetRef.current }); }
-      if (k.has('ArrowRight')) { followRef.current = false; setFollow(false); offsetRef.current = { ...offsetRef.current, x: offsetRef.current.x - CAM }; setOffset({ ...offsetRef.current }); }
+      if (k.has('Numpad8')) { followRef.current = false; setFollow(false); offsetRef.current = { ...offsetRef.current, y: offsetRef.current.y + CAM }; setOffset({ ...offsetRef.current }); }
+      if (k.has('Numpad2')) { followRef.current = false; setFollow(false); offsetRef.current = { ...offsetRef.current, y: offsetRef.current.y - CAM }; setOffset({ ...offsetRef.current }); }
+      if (k.has('Numpad4')) { followRef.current = false; setFollow(false); offsetRef.current = { ...offsetRef.current, x: offsetRef.current.x + CAM }; setOffset({ ...offsetRef.current }); }
+      if (k.has('Numpad6')) { followRef.current = false; setFollow(false); offsetRef.current = { ...offsetRef.current, x: offsetRef.current.x - CAM }; setOffset({ ...offsetRef.current }); }
 
       rafId = requestAnimationFrame(loop);
     };
@@ -203,7 +203,7 @@ export function useGameLoop({ sendMove, stageWidth, stageHeight, paused }: GameL
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sendMove]);
 
-  // ── Drag-to-Move: von außen aufrufbar (z.B. AvatarLayer) ──────────────────
+  // ── Drag-to-Move: callable from outside (e.g. AvatarLayer) ───────────────
   const updateFromDrag = useCallback((wx: number, wy: number) => {
     const newWx = Math.max(0, Math.min(MAP.w, wx));
     const newWy = Math.max(0, Math.min(MAP.h, wy));
