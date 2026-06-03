@@ -188,11 +188,7 @@ const LoginModal = () => {
             <button style={btnPrimary} onClick={handleCheckEmail} disabled={loading}>
               {loading ? '⏳ ...' : 'Weiter'}
             </button>
-            <button style={linkBtn} onClick={() => {
-              if (!email.trim()) { setError('Bitte zuerst E-Mail eingeben.'); return; }
-              setError(''); setStep('register');
-              setTimeout(() => passwordRef.current?.focus(), 50);
-            }}>
+            <button style={linkBtn} onClick={() => { setError(''); setStep('register'); }}>
               Neues Konto registrieren
             </button>
           </>
@@ -225,9 +221,18 @@ const LoginModal = () => {
         {step === 'register' && (
           <>
             <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 12 }}>
-              Neue E-Mail – Account erstellen:
+              Neues Konto erstellen:
             </div>
-            <input style={inputReadonly} type="email" value={email} readOnly tabIndex={-1} />
+            <input
+              style={inputStyle}
+              type="email"
+              placeholder="E-Mail"
+              maxLength={100}
+              value={email}
+              autoFocus
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && passwordRef.current?.focus()}
+            />
             <input
               ref={passwordRef}
               style={inputStyle}
