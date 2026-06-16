@@ -81,6 +81,7 @@ const S: Record<string, React.CSSProperties> = {
   },
 };
 
+// These label names must exist in the GitHub repo with exactly these names
 const AVAILABLE_LABELS = ['bug', 'Verbesserung', 'Frage'] as const;
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -102,6 +103,7 @@ const IssueModal: React.FC = () => {
   // Load repos when modal opens
   useEffect(() => {
     if (!isOpen || !jwt) return;
+    setError('');
     setReposLoading(true);
     listRepos(jwt)
       .then((data) => {
