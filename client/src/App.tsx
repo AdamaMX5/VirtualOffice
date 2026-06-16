@@ -3,6 +3,7 @@ import { useDeskStore } from './model/stores/deskStore';
 import { useServiceStatusStore } from './model/stores/serviceStatusStore';
 import { useProfileStore } from './model/stores/profileStore';
 import { useInviteModalStore } from './model/stores/inviteModalStore';
+import { useIssueModalStore } from './model/stores/issueModalStore';
 import { useGuestWaitStore } from './model/stores/guestWaitStore';
 import OfficeCanvas from './components/OfficeCanvas';
 import LoginModal from './components/modals/LoginModal';
@@ -10,6 +11,7 @@ import DeskModal from './components/modals/DeskModal';
 import ServiceStatusModal from './components/modals/ServiceStatusModal';
 import ProfileModal from './components/modals/ProfileModal';
 import InviteModal from './components/modals/InviteModal';
+import IssueModal from './components/modals/IssueModal';
 import GuestWaitScreen from './components/modals/GuestWaitScreen';
 import AvatarContextMenu from './components/AvatarContextMenu';
 import ReceptionMenu from './components/ReceptionMenu';
@@ -28,6 +30,7 @@ const AppInner = () => {
   const serviceStatusOpen = useServiceStatusStore((s) => s.isOpen);
   const profileOpen       = useProfileStore((s) => s.isOpen);
   const inviteModalOpen   = useInviteModalStore((s) => s.isOpen);
+  const issueModalOpen    = useIssueModalStore((s) => s.isOpen);
   const guestWaiting      = useGuestWaitStore((s) => s.tooEarlyInfo !== null);
   const ctxMenuOpen       = useContextMenuStore((s) => s.isOpen);
   const receptionOpen     = useReceptionMenuStore((s) => s.isOpen);
@@ -40,6 +43,7 @@ const AppInner = () => {
       {serviceStatusOpen  && <ServiceStatusModal />}
       {profileOpen        && <ProfileModal />}
       {inviteModalOpen    && <InviteModal />}
+      {issueModalOpen     && <IssueModal />}
       {guestWaiting       && <GuestWaitScreen />}
       {ctxMenuOpen        && <AvatarContextMenu />}
       {receptionOpen      && <ReceptionMenu />}

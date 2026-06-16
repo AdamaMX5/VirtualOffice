@@ -6,6 +6,7 @@ import { useAuthStore } from '../../model/stores/authStore';
 import { useLiveKitStore } from '../../model/stores/liveKitStore';
 import { useMessageStore } from '../../model/stores/messageStore';
 import { useInviteModalStore } from '../../model/stores/inviteModalStore';
+import { useIssueModalStore } from '../../model/stores/issueModalStore';
 import { logout } from '../../services/authClient';
 
 const isTouchDevice =
@@ -100,6 +101,7 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
   const isProxCall    = useLiveKitStore((s) => s.isProxCall);
   const unreadTotal   = useMessageStore((s) => s.unreadTotal);
   const openInviteModal = useInviteModalStore((s) => s.open);
+  const openIssueModal  = useIssueModalStore((s) => s.open);
 
   const jwt          = useAuthStore((s) => s.jwt);
   const isAuth       = jwt !== null;
@@ -237,6 +239,24 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
         </button>
       )}
     </div>
+
+    {/* Bottom-right improvement button — only visible when logged in */}
+    {isAuth && (
+      <div style={{
+        position: 'fixed',
+        bottom: 'max(16px, env(safe-area-inset-bottom, 0px))',
+        right:  'max(16px, env(safe-area-inset-right, 0px))',
+        zIndex: 100,
+        pointerEvents: 'none',
+      }}>
+        <button
+          style={{ ...meetingBtnStyle, pointerEvents: 'all' }}
+          onClick={openIssueModal}
+        >
+          💡 Verbesserung
+        </button>
+      </div>
+    )}
     </>
   );
 };
