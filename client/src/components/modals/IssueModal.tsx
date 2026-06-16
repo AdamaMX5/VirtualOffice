@@ -154,7 +154,8 @@ const IssueModal: React.FC = () => {
       const result = await createIssue(jwt, selectedRepo, issueTitle.trim(), issueBody.trim(), labels);
       setCreated(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Fehler beim Erstellen des Issues.');
+      const msg = err instanceof Error ? err.message : 'Fehler beim Erstellen des Issues.';
+      setError(msg.includes('401') ? 'Sitzung abgelaufen – bitte neu einloggen.' : msg);
     } finally {
       setLoading(false);
     }
@@ -241,7 +242,7 @@ const IssueModal: React.FC = () => {
           <div style={S.success}>
             Issue #{created.number} erstellt ✅{' '}
             <a
-              href={created.url}
+              href={created.url.startsWith('https://') ? created.url : '#'}
               target="_blank"
               rel="noopener noreferrer"
               style={S.successLink}
