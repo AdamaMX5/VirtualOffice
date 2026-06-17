@@ -84,6 +84,9 @@ const S: Record<string, React.CSSProperties> = {
 // These label names must exist in the GitHub repo with exactly these names
 const AVAILABLE_LABELS = ['bug', 'Verbesserung', 'Frage'] as const;
 
+// Preselect this repo when present, since most issues filed from VirtualOffice concern it
+const DEFAULT_REPO = 'VirtualOffice';
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const IssueModal: React.FC = () => {
@@ -108,7 +111,8 @@ const IssueModal: React.FC = () => {
     listRepos(jwt)
       .then((data) => {
         setRepos(data);
-        if (data.length > 0) setSelectedRepo(data[0].name);
+        const defaultRepo = data.find((r) => r.name === DEFAULT_REPO) ?? data[0];
+        if (defaultRepo) setSelectedRepo(defaultRepo.name);
       })
       .catch(() => setError('Repositories konnten nicht geladen werden.'))
       .finally(() => setReposLoading(false));
