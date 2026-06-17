@@ -229,6 +229,18 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
           style={{
             ...meetingBtnStyle,
             background: 'rgba(15,15,19,0.85)',
+            border: '1px solid rgba(255,255,255,0.15)',
+          }}
+          onClick={openIssueModal}
+        >
+          💡 Verbesserung
+        </button>
+      )}
+      {isAuth && (
+        <button
+          style={{
+            ...meetingBtnStyle,
+            background: 'rgba(15,15,19,0.85)',
             border: '1px solid rgba(255,255,255,0.1)',
             color: 'rgba(255,255,255,0.45)',
             fontSize: 11,
@@ -239,25 +251,7 @@ const HUD = ({ onOpenMeeting, onToggleFurniture, furnitureModeActive, onToggleMe
         </button>
       )}
     </div>
-
-    {/* Bottom-right improvement button — only visible when logged in */}
-    {isAuth && (
-      <div style={{
-        position: 'fixed',
-        bottom: 'max(16px, env(safe-area-inset-bottom, 0px))',
-        right:  'max(16px, env(safe-area-inset-right, 0px))',
-        zIndex: 100,
-        pointerEvents: 'none',
-      }}>
-        <button
-          style={{ ...meetingBtnStyle, pointerEvents: 'all' }}
-          onClick={openIssueModal}
-        >
-          💡 Verbesserung
-        </button>
-      </div>
-    )}
-    </>
+</>
   );
 };
 
