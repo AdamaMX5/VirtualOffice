@@ -7,20 +7,38 @@
  *   vo:{room}:events          → Pub/Sub-Channel für alle Presence-Events
  *   vo:{room}:users:{userId}  → Hash { name, department, x, y }, TTL 120 s
  *
- * Eingehende Nachrichten (Client → Server):
- *   set_name      { name, department? }
- *   move          { x, y }
- *   refresh_token { token }
- *   notify_user   { targetUserId }
- *   chat          { text }
+ * Incoming messages (Client → Server):
+ *   set_name         { name, department?, title? }
+ *   move             { x, y }
+ *   refresh_token    { token }
+ *   notify_user      { targetUserId, callType? }   // no callType → delivered as new_message
+ *   chat             { text }
+ *   proximity_enter  { roomName, userCount, prio } // rejected for guests/bots
+ *   proximity_switch { oldRoomName, newRoomName }
+ *   proximity_exit   { roomName }
+ *   meeting_bg       { backgroundUrl }             // logged-in users only
+ *   room_lock        { room, locked }
+ *   room_knock       { room }
+ *   room_admit       { room, userId }              // owner only
  *
- * Ausgehende Nachrichten (Server → Client):
- *   snapshot    { users[] }
- *   user_joined { user_id, name, department?, x, y }
- *   user_moved  { user_id, x, y }
- *   user_left   { user_id }
- *   new_message { senderId }
- *   chat        { userId, text }
+ * Outgoing messages (Server → Client):
+ *   snapshot           { users[] }
+ *   user_joined        { user_id, name, department?, title?, x, y }
+ *   user_moved         { user_id, x, y }
+ *   user_left          { user_id }
+ *   new_message        { senderId }
+ *   notify_user        { targetUserId, senderId, callType?, guestName? }
+ *   chat               { userId, text }
+ *   proximity_call     { fromUserId, fromName, roomName, userCount, prio }
+ *   proximity_switch   { oldRoomName, newRoomName }
+ *   proximity_ended    { roomName }
+ *   meeting_bg         { backgroundUrl }
+ *   room_lock_update   { room, locked, lockerId? }
+ *   room_knock_request { room, userId, name }      // targeted: owner only
+ *   room_admitted      { room }                    // targeted: knocker only
+ *
+ * Targeted events (sent only to targetUserId): notify_user, room_knock_request,
+ * room_admitted. All others are broadcast to everyone except the sender.
  */
 
 import { WebSocketServer, WebSocket } from 'ws';
