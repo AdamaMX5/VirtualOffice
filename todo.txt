@@ -1,3 +1,0 @@
-1. bitte entferne die move console outputs beim CLient und auf dem Server.
-
-

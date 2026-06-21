@@ -1,13 +1,12 @@
 /**
- * Verbindet automatisch mit dem LiveKit "meeting"-Raum,
- * sobald der Spieler den Meetingraum betritt – und trennt
- * die Verbindung wieder, wenn er ihn verlässt.
+ * Automatically connects to the LiveKit "meeting" room when the player enters
+ * the meeting room area, and disconnects when they leave.
  *
- * Wenn der Meetingraum gesperrt ist, wird die Verbindung blockiert
- * bis der Spieler explizit eingelassen wurde.
+ * When the meeting room is locked, the connection is blocked until the player
+ * has been explicitly admitted by the room owner.
  *
- * Bei Verbindungsfehler wird nach 5 Sekunden erneut versucht,
- * solange der Spieler im Meetingraum bleibt.
+ * On connection error, a retry is attempted after 5 seconds as long as the
+ * player remains in the meeting room.
  */
 import { useEffect, useRef } from 'react';
 import { usePlayerStore } from '../model/stores/playerStore';
@@ -29,9 +28,9 @@ export function useMeetingRoom() {
     }
   };
 
-  // Haupt-Effekt: Betreten / Verlassen des Meetingraums
-  // KEIN `admitted` in den Deps — setAdmitted() darf nicht hier aufgerufen werden,
-  // sonst entsteht der React-#185-Loop (Dep ändert sich im eigenen Effect).
+  // Main effect: entering / leaving the meeting room.
+  // NO `admitted` in deps — setAdmitted() must not be called here, otherwise
+  // the React #185 loop occurs (dep changes inside its own effect).
   useEffect(() => {
     const prev = prevRoomRef.current;
     prevRoomRef.current = currentRoom;
@@ -48,10 +47,10 @@ export function useMeetingRoom() {
       } else if (status === 'connected' && roomName !== 'meeting') {
         switchRoom('meeting');
       }
-      // Fehler-Retry wird im Subscription-Effekt unten gesteuert
+      // Error retry is managed by the subscription effect below
     } else if (prev === 'Meetingraum') {
       clearRetry();
-      // Immer disconnecten – auch wenn status === 'error' (Room-Objekt stoppen)
+      // Always disconnect — even when status === 'error' (stop the Room object)
       const { status } = useLiveKitStore.getState();
       if (status !== 'idle') {
         disconnect();
@@ -59,12 +58,13 @@ export function useMeetingRoom() {
     }
   }, [currentRoom, connect, switchRoom, disconnect]);
 
-  // Einlass-Effekt: feuert wenn der Spieler vom Raumbesitzer eingelassen wird.
-  // Löscht das admitted-Flag und verbindet dann — getrennt vom Haupt-Effekt,
-  // damit setAdmitted(false) NICHT in einem Effect liegt, der admitted als Dep hat.
+  // Admission effect: fires when the player is let in by the room owner.
+  // Consumes the admitted flag and then connects — kept separate from the main
+  // effect so that setAdmitted(false) is NOT inside an effect that has admitted
+  // as a dependency.
   useEffect(() => {
     if (!admitted || currentRoom !== 'Meetingraum') return;
-    useRoomLockStore.getState().setAdmitted(false); // Flag konsumieren
+    useRoomLockStore.getState().setAdmitted(false); // consume the flag
     const { status, roomName } = useLiveKitStore.getState();
     if (status === 'idle') {
       connect('meeting');
@@ -73,7 +73,7 @@ export function useMeetingRoom() {
     }
   }, [admitted, currentRoom, connect, switchRoom]);
 
-  // Retry-Effekt: bei Fehler nach 5s erneut verbinden
+  // Retry effect: reconnect after 5s on error
   useEffect(() => {
     if (currentRoom !== 'Meetingraum') return;
 

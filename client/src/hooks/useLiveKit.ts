@@ -13,10 +13,10 @@ import { hangUpProxCall } from './useProximityCall';
 // ── Module-level Room singleton ───────────────────────────────────────────────
 
 let _room: Room | null = null;
-let _connecting               = false;   // verhindert parallele connect()-Aufrufe
+let _connecting               = false;   // prevents concurrent connect() calls
 let _lastConnectAttempt       = 0;
-const CONNECT_COOLDOWN_MS     = 3000;    // mind. 3s zwischen zwei Versuchen
-let _failedConnect            = false;   // verhindert Reset nach fehlgeschlagenem connect()
+const CONNECT_COOLDOWN_MS     = 3000;    // min. 3s between attempts
+let _failedConnect            = false;   // prevents state reset after a failed connect()
 
 export function getRoom(): Room | null {
   return _room;
@@ -24,14 +24,14 @@ export function getRoom(): Room | null {
 
 const FORCE_TURN = import.meta.env.VITE_LIVEKIT_FORCE_TURN === 'true';
 
-// Shorthand – alle Store-Aufrufe über getState(), damit keine React-Subscription
-// auf den ganzen Store entsteht und Callbacks stabil bleiben.
+// Shorthand – all store calls via getState() to avoid subscribing to the whole
+// store and to keep callbacks stable.
 const S = () => useLiveKitStore.getState();
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useLiveKit() {
-  // Nur die Werte lesen, die wirklich für stabile Callback-Deps gebraucht werden
+  // Only read values that are actually needed for stable callback deps
   const playerName = usePlayerStore((s) => s.name);
   const email      = useAuthStore((s) => s.email);
   const authStatus = useAuthStore((s) => s.authStatus);
@@ -64,7 +64,7 @@ export function useLiveKit() {
     S().setError(null);
 
     let room: Room | null = null;
-    let attemptedUrl = '(Token-Abruf noch nicht abgeschlossen)';
+    let attemptedUrl = '(token fetch not yet complete)';
     try {
       const identity = buildIdentity();
       const { token, url } = await apiPost<{ token: string; url: string }>(
@@ -76,8 +76,7 @@ export function useLiveKit() {
       room = new Room({
         adaptiveStream: true,
         dynacast: true,
-        // Internes Reconnect deaktivieren – bei 401 ist ein neuer Token nötig,
-        // blindes Retry macht es nur schlimmer.
+        // Disable internal reconnect — a 401 requires a fresh token; blind retries make it worse.
         reconnectPolicy: { nextRetryDelayInMs: () => null },
       });
       _room = room;
@@ -94,7 +93,7 @@ export function useLiveKit() {
       room.on(RoomEvent.Disconnected, () => {
         _room = null;
         if (!_failedConnect) {
-          S().reset(); // nur bei echtem Disconnect zurücksetzen, nicht nach connect()-Fehler
+          S().reset(); // only reset on a real disconnect, not after a failed connect()
         }
         _failedConnect = false;
       });
@@ -106,24 +105,24 @@ export function useLiveKit() {
       syncParticipants();
       _connecting = false;
 
-      // Mic/Kamera getrennt aktivieren — Gerätefehler sollen den Meeting-Join nicht abbrechen
+      // Enable mic/camera separately — device errors must not abort the meeting join
       try {
         await room.localParticipant.setMicrophoneEnabled(true);
         S().setMicEnabled(true);
       } catch (e) {
-        console.warn('[LiveKit] Mikrofon aktivieren fehlgeschlagen:', e);
+        console.warn('[LiveKit] Microphone enable failed:', e);
       }
       try {
         await room.localParticipant.setCameraEnabled(true);
         S().setCamEnabled(true);
       } catch (e) {
-        console.warn('[LiveKit] Kamera (Standard) fehlgeschlagen, versuche ohne deviceId:', e);
-        // Fallback: gecachte deviceId ignorieren
+        console.warn('[LiveKit] Camera (default) failed, retrying without deviceId:', e);
+        // Fallback: ignore cached deviceId
         try {
           await room.localParticipant.setCameraEnabled(true, { deviceId: undefined });
           S().setCamEnabled(true);
         } catch (e2) {
-          console.warn('[LiveKit] Kamera konnte nicht aktiviert werden:', e2);
+          console.warn('[LiveKit] Camera could not be enabled:', e2);
         }
       }
     } catch (err) {

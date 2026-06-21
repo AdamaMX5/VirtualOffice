@@ -20,7 +20,7 @@ const ParticipantTile: React.FC<TileProps> = ({ participant, isLocal, speakerEna
   const audioRef = useRef<HTMLAudioElement>(null);
   const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
 
-  // Direkt beim Render aus dem Participant lesen — nie veraltet, auch nach Parent-Rerender
+  // Read directly at render time — never stale, even after parent re-renders
   const hasCam = !!participant.getTrackPublication(Track.Source.Camera)?.track;
 
   useEffect(() => {
