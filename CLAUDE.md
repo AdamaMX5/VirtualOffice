@@ -9,7 +9,7 @@ See @../../.claude/MSArchitecture/ProfileService.md für ProfileService details 
 See @../../.claude/MSArchitecture/ObjectService.md für ObjectService details (Persistenz).
 See @../../.claude/MSArchitecture/MediaService.md für MediaService details (Bilder und Videos ).
 See @../../.claude/MSArchitecture/EmailService.md für EmailService details (Sende Nachfragen zum Issue-Ersteller).
-See @../../.claude/MSArchitecture/EmailService.md für ExceptionService details (Sende Fehlerfälle).
+See @../../.claude/MSArchitecture/ExceptionService.md für ExceptionService details (Sende Fehlerfälle).
 See @../../.claude/MSArchitecture/MessageService.md für MessageService details (Nachrichten zu anderen Usern).
 See @../../.claude/MSArchitecture/RecordingService.md für RecordingService details (Serverseitige Aufnahmen von LiveKit Meetings).
 See @../../.claude/MSArchitecture/GitService.md für GitService details (Issue creation)
@@ -81,6 +81,21 @@ function requireJwt(): string {
   return jwt;
 }
 ```
+
+## Camera/Video Display Standard — REQUIRED for all new camera-showing components
+
+This bug ("camera element doesn't show the stream even though the hardware camera is active") has recurred multiple times. Every new component that binds a `<video>` element to a LiveKit camera track MUST follow this checklist:
+
+1. **Read `hasCam` at render time**, never store it in `useState` — it goes stale after parent re-renders:
+   `const hasCam = !!participant.getTrackPublication(Track.Source.Camera)?.track;`
+2. **Call `attach()` inside the mount effect itself**, not only from an event handler — `LocalTrackPublished`/`TrackSubscribed` can fire before the component mounts and registers its listener.
+3. **Subscribe to all six track events** and call `forceUpdate()` in the handler so `hasCam` gets re-read: `TrackSubscribed`, `TrackUnsubscribed`, `TrackMuted`, `TrackUnmuted`, `TrackPublished`, `TrackUnpublished`.
+4. **Never set `videoEl.style.display` directly** — drive visibility via JSX (`display: hasCam ? 'block' : 'none'`) from the render-time `hasCam` read. React overwrites direct DOM mutation on the next re-render.
+5. **Retry `.play()` after attach** — autoplay can silently fail: call once immediately, once on `canplay`, and once after a 300ms `setTimeout`.
+
+Copy the `attach`/`detach`/`reattach` structure from an existing reference implementation rather than writing it from scratch: `client/src/components/media/VideoGrid.tsx` (`ParticipantTile`), `client/src/components/media/VideoManager.tsx` (`ParticipantMedia`), `client/src/components/meeting/MeetingOverlay.tsx`.
+
+See "Established React Patterns" and "LiveKit-Specific Gotchas" below for the detailed rationale behind each rule.
 
 ## Client — Important Constants
 
