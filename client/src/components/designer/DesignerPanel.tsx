@@ -12,7 +12,7 @@ function formatRoom(r: Room): string {
 }
 
 function formatWall(w: Wall): string {
-  return `  { f:[${w.f[0]},${w.f[1]}], t:[${w.t[0]},${w.t[1]}], type:'wall' }`;
+  return `  { f:[${w.f[0]},${w.f[1]}], t:[${w.t[0]},${w.t[1]}], type:'${w.type}' }`;
 }
 
 function generateCode(rooms: Room[], walls: Wall[]): string {

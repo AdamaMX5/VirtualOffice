@@ -144,7 +144,7 @@ export function parseMapDocument(doc: MapDocument): {
     walls.push({
       f: [fp.x, fp.y],
       t: [tp.x, tp.y],
-      type: (mw.left !== null && mw.right !== null) ? 'shared' : 'wall',
+      type: mw.type === 'door' ? 'door' : (mw.left !== null && mw.right !== null) ? 'shared' : 'wall',
     });
   }
 
@@ -232,7 +232,7 @@ export function toMapDocument(
     const leftRoom  = roomForDir(w.f[0], w.f[1], w.t[0], w.t[1]);
     const rightRoom = roomForDir(w.t[0], w.t[1], w.f[0], w.f[1]);
 
-    mapWalls.push({ id: `w${wn++}`, from: pid(w.f[0], w.f[1]), to: pid(w.t[0], w.t[1]), left: leftRoom, right: rightRoom, type: 'wall' });
+    mapWalls.push({ id: `w${wn++}`, from: pid(w.f[0], w.f[1]), to: pid(w.t[0], w.t[1]), left: leftRoom, right: rightRoom, type: w.type === 'door' ? 'door' : 'wall' });
   });
 
   // Räume bauen — Wände aus leftRoom/rightRoom-Zuweisung

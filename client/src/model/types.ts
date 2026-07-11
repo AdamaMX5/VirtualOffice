@@ -22,7 +22,7 @@ export interface MapWall {
   to: string;         // Punkt-ID
   left: string | null;  // Raum-ID oder null
   right: string | null; // Raum-ID oder null
-  type: 'wall';
+  type: 'wall' | 'door';
 }
 
 export interface MapRoom {
