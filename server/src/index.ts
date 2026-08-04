@@ -5,7 +5,7 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import { AccessToken, EgressClient, EncodedFileOutput, EncodedFileType } from 'livekit-server-sdk';
 
-import { config } from './config';
+import { config, getLiveKitConfigError } from './config';
 import { proxyLogin, proxyRegister, proxyRefresh, normalizeAuth } from './proxies/authProxy';
 import { attachPresenceWs, getConnectedUsers, decodeJwtPayload } from './presenceWs';
 import { startReceptionBot, startAdminBot } from './presence';
@@ -63,8 +63,10 @@ app.post('/api/auth/refresh', async (req, res) => {
 
 app.post('/api/livekit/token', async (req, res) => {
   const { room, identity, name } = req.body as { room: string; identity: string; name?: string };
-  if (!config.LIVEKIT_API_KEY || !config.LIVEKIT_API_SECRET) {
-    res.status(500).json({ error: 'LiveKit nicht konfiguriert (API Key/Secret fehlen)' });
+  const liveKitConfigError = getLiveKitConfigError();
+  if (liveKitConfigError) {
+    console.error(`[LiveKit] ${liveKitConfigError}`);
+    res.status(500).json({ error: liveKitConfigError });
     return;
   }
   const at = new AccessToken(config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET, {
@@ -81,8 +83,10 @@ app.post('/api/livekit/token', async (req, res) => {
 
 app.post('/api/livekit/egress/start', async (req, res) => {
   const { room } = req.body as { room: string };
-  if (!config.LIVEKIT_API_KEY || !config.LIVEKIT_API_SECRET) {
-    res.status(500).json({ error: 'LiveKit nicht konfiguriert' });
+  const liveKitConfigError = getLiveKitConfigError();
+  if (liveKitConfigError) {
+    console.error(`[LiveKit] ${liveKitConfigError}`);
+    res.status(500).json({ error: liveKitConfigError });
     return;
   }
   try {
@@ -102,8 +106,10 @@ app.post('/api/livekit/egress/start', async (req, res) => {
 
 app.post('/api/livekit/egress/stop', async (req, res) => {
   const { egressId } = req.body as { egressId: string };
-  if (!config.LIVEKIT_API_KEY || !config.LIVEKIT_API_SECRET) {
-    res.status(500).json({ error: 'LiveKit nicht konfiguriert' });
+  const liveKitConfigError = getLiveKitConfigError();
+  if (liveKitConfigError) {
+    console.error(`[LiveKit] ${liveKitConfigError}`);
+    res.status(500).json({ error: liveKitConfigError });
     return;
   }
   try {
@@ -168,6 +174,11 @@ app.get('*path', (_req, res) => {
 
 const server = http.createServer(app);
 attachPresenceWs(server);
+
+const startupLiveKitConfigError = getLiveKitConfigError();
+if (startupLiveKitConfigError) {
+  console.warn(`[LiveKit] ${startupLiveKitConfigError} LiveKit-Verbindungen werden fehlschlagen, bis die Umgebungsvariable(n) gesetzt sind.`);
+}
 
 server.listen(config.PORT, () => {
   console.log(`Server läuft auf http://localhost:${config.PORT}`);
