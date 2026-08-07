@@ -104,7 +104,16 @@ async function joinProxRoom(
       { room: roomName, identity, name },
     );
 
-    const room = new Room({ adaptiveStream: true, dynacast: true });
+    const room = new Room({
+      adaptiveStream: true,
+      dynacast: true,
+      // Browser-native noise suppression + echo cancellation on the sender's mic.
+      audioCaptureDefaults: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
     _proxRoom     = room;
     _proxRoomName = roomName;
 

@@ -76,6 +76,13 @@ export function useLiveKit() {
       room = new Room({
         adaptiveStream: true,
         dynacast: true,
+        // Browser-native noise suppression + echo cancellation on the sender's mic.
+        // Reduces overdriven/hall/typing noise from the remote participant's side.
+        audioCaptureDefaults: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
         // Disable internal reconnect — a 401 requires a fresh token; blind retries make it worse.
         reconnectPolicy: { nextRetryDelayInMs: () => null },
       });
